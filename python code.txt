@@ -1,0 +1,194 @@
+{"Staff 1": {"Username": "jolismart", "Password": "smart", "Email": "smart@gmail.com", "Full Name" :
+"Jo Li"), "Staff 2": {"Username": "emamimus", "Password": "mimus", "Email": "emamimus@gmail.com", "Full
+Nanme": "Ema Mimus"}}
+
+
+
+import json
+def login():
+print(f"Enter Details")
+username = input( "Please enter your username- )
+password = input (f 'Please enter your password')
+with open('staff.txt') as json_file:
+data = json.load( json_file)
+while (username = (data['Staff 1']['Username']) or password != (data['Staff 1']['Password']))
+and (username != (data[staff 2']['username']) or password != (data['staff 2']['Password'])):
+print('Username or password not found')
+else:
+print(f 'Welcome {username}')
+
+
+
+import os
+import re
+from random import randint
+def create():
+name_correct = False
+while name_correct == False:
+name = str(input(f"Enter customer's name"))
+if len(name) > 4:
+if not name, isalpha():
+print("Only alphabets are allowed)
+name_correct = False
+else:
+name_correct = True
+print("Name should be longer than four characters')
+name_correct = False
+balance_correct = False
+while balance_correct == False:
+try:
+balance = float(input( 'Enter opening balance'))
+balance_correct - True
+break
+except ValueError:
+print( 'Only numbers allowed)
+balance_correct = False
+acc_type_correct = False
+while acc_type_correct = False:
+acc_type - input(f"Enter account type( Savings or Current)")
+if (acc_type.upper() -- "SAVINGS" or acc_type.upper() == "CURRENT"):
+acc_type_correct = True
+else:
+print("Enter account type(Savings or Current)')
+acc_type_correct = False
+
+
+email_correct = False
+while email correct - Falses
+email = input( 'Enter email')
+regex = "miw+([\.-17\w+]@\w+([\--]?\w+)(\. \w{2,3})+$'
+if re.search(regex, email):
+email_correct = True
+else:
+email_correct = False
+number = random_with_N_digits(10)
+customer_file_data = []
+customer_banking_data = {username: [{
+Account name': name.title),
+Opening Balance': balance,
+"Account Type': acc_type.title(),
+Account email': email,
+Account Number': number,
+},}
+print( f "An account with account number {number} has been opened for {name}" )
+tf os.stat( 'customer.txt').st_size == 0:
+customer_file_data.append( customer_banking_data)
+with open('customer.txt', 'W') as obj:
+json.dump( customer_file_data, obj)
+else:
+with open( 'customer.txt') as obj:
+data - json.load(obj)
+data.append( customer_banking_data)
+with open( 'customer.txt', 'W') as obj:
+json.dump(data, obj)
+
+
+def account():
+try:
+collect_number = int(input(f"Enter customer's account number: -))
+with open('customer.txt') as file_obj:
+data = json.load(file_obj)
+found_flag - False
+for user_data in data:
+for user_data_key in user_data.keys():
+for user_details in user_data[user_data_key]:
+if collect_number in user_details.values():
+found_flag = True
+print("\nAccount Found ! See details below:')
+print(user_details)
+if found_flag = False:
+print("\nAccount Not Found! You can register a new one.')
+except valueError:
+print("Only integers are allowed)
+
+
+def welcome():
+print("==========================")
+print(" ----Welcome to SNBank---- ") 
+print("****************** *******************")
+print("=<< 1. Staff Login >>=")
+print("=<< 2. Close App >>=")
+print("******************* **** *****")
+choice = input(f 'Select your choice number from the above menu :') 
+if choice == "1":
+   login() 
+elif choice == "2":
+    print('Thanks for banking with us')
+    break 
+else:
+    print('Wrong input') 
+	welcome()
+
+def staff():
+print("*************************************") 
+print("=<< 1. Create new bank account >>=" ) 
+print("=<< 2. Check Account Details  >>=")
+print("=<< 3. Logout      >>=")            
+print("************************************")
+choice = input(f'Select your choice number from the above menu :') 
+if choice == "1":
+   create() 
+elif choice => "2":
+   account() 
+elif choice == "3":
+   welcome() else:
+print('Wrong input') 
+staff()
+
+
+
+def read_and_split_file(self, genre: str, file_name: str) -> list:
+    text_data = list()
+    current_file = os.path.abspath(os.path.join('data', genre, file_name))
+    if os.path.exists(current_file):
+        open_file = open(current_file, 'r', encoding="latin-1")
+        text_data = open_file.read().split('\n')
+        text_data = list(filter(None, text_data))
+    return text_data
+	
+	
+	def extract_genre_files(self, genre: str) -> pd.DataFrame:
+    found = True
+    current_number = 1
+    titles = list()
+    subtitles = list()
+    texts = list()
+    token_counts = list()
+    while found:
+        file_name = "{:03d}.txt".format(current_number)
+        text_data = self.read_and_split_file(genre, file_name)
+        if len(text_data) != 0:
+            titles.append(text_data[0])
+            subtitles.append(text_data[1])
+            article_text = ' '.join(text_data[2:])
+            texts.append(article_text)
+            token_counts.append(len(nltk.word_tokenize(article_text)))
+            current_number += 1
+        else:
+            found = False
+
+    genres = [genre] * len(titles)
+    data = {'genre': genres, 'title': titles, 'subtitle': subtitles, 'text': texts, 'token_counts': token_counts}
+    data_frame = pd.DataFrame(data)
+    return data_frame
+	
+	
+	import nltk
+# nltk.download('punkt')
+import pandas as pd
+
+
+def transform_texts_to_df(self, name, genre_list, delimiter = '\t'):
+    article_df_list = list()
+    for genre in genre_list:
+        article_df_list.append(self.extract_genre_files(genre))
+    df = pd.concat(article_df_list)
+    df.to_csv(name, sep=delimiter)
+    return df
+	
+	
+	if __name__ == "__main__":
+    genre_list = ['business', 'entertainment', 'politics', 'sport', 'tech']
+    parser = ArticleCSVParser()
+    df = parser.transform_texts_to_df('bbc_articles.csv', genre_list)
+    print(df.head())
