@@ -1,0 +1,42 @@
+ import subprocess
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+
+def run_shell_script(script_path):
+    try:
+        result = subprocess.check_output(script_path, shell=True, text=True, stderr=subprocess.STDOUT)
+        return result
+    except subprocess.CalledProcessError as e:
+        return f"Error running {script_path}:\n{e.output}"
+
+def generate_pdf(output_file, script_output):
+    c = canvas.Canvas(output_file, pagesize=letter)
+    width, height = letter
+    x, y = 50, height - 100
+
+    c.setFont("Helvetica", 12)
+    c.drawString(x, y, "Script Output:")
+
+    y -= 20
+    for output in script_output:
+        c.setFont("Courier", 10)
+        c.drawString(x, y, output)
+        y -= 15
+
+    c.save()
+
+if __name__ == "__main__":
+    shell_scripts = [
+        "/path/to/script1.sh",
+        "/path/to/script2.sh",
+        # Add more script paths here as needed
+    ]
+
+    script_output = []
+    for script_path in shell_scripts:
+        output = run_shell_script(script_path)
+        script_output.append(f"Script: {script_path}\n{output}\n\n")
+
+    output_pdf = "output.pdf"
+    generate_pdf(output_pdf, script_output)
+    print(f"PDF generated: {output_pdf}")
