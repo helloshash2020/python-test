@@ -1,0 +1,85 @@
+import schedule
+import time
+import psycopg2
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import datetime
+import requests
+
+# PostgreSQL database connection parameters
+db_params = {
+    'dbname': 'your_database_name',
+    'user': 'your_database_user',
+    'password': 'your_database_password',
+    'host': 'your_database_host',
+    'port': 'your_database_port'
+}
+
+# SQL queries to execute
+sql_queries = [
+    "SELECT * FROM table1",
+    "SELECT * FROM table2"
+]
+
+# Confluence credentials
+confluence_username = "your_confluence_username"
+confluence_password = "your_confluence_password"
+confluence_page_id = "your_confluence_page_id"
+
+def run_queries_and_generate_pdf():
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    pdf_filename = f"output_{current_datetime}.pdf"
+
+    try:
+        # Connect to the PostgreSQL database
+        conn = psycopg2.connect(**db_params)
+        cursor = conn.cursor()
+
+        # Execute SQL queries and fetch results
+        query_results = []
+        for query in sql_queries:
+            cursor.execute(query)
+            result = cursor.fetchall()
+            query_results.append(result)
+
+        # Generate a PDF with query results
+        c = canvas.Canvas(pdf_filename, pagesize=letter)
+        c.drawString(100, 750, f"Report generated at {current_datetime}")
+        y_position = 700
+        for result in query_results:
+            for row in result:
+                c.drawString(100, y_position, str(row))
+                y_position -= 15
+            y_position -= 15
+        c.save()
+
+        # Upload the PDF file to Confluence
+        confluence_url = f"https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME"
+        headers = {"X-Atlassian-Token": "no-check"}
+        files = {"file": (pdf_filename, open(pdf_filename, "rb"))}
+        auth = (confluence_username, confluence_password)
+
+        response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
+        if response.status_code == 200:
+            print("PDF file uploaded successfully to Confluence!")
+        else:
+            print("Failed to upload PDF file to Confluence.")
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+
+    finally:
+        # Close the database connection and remove the temporary PDF file
+        if conn:
+            conn.close()
+        if pdf_filename:
+            import os
+            os.remove(pdf_filename)
+
+# Schedule the task to run at a specific time (e.g., every day at 2:00 PM)
+schedule.every().day.at("14:00").do(run_queries_and_generate_pdf)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
