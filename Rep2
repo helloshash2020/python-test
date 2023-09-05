@@ -1,0 +1,60 @@
+import subprocess
+import datetime
+import schedule
+import time
+from fpdf import FPDF
+import requests
+
+# Linux commands to execute
+linux_commands = [
+    "command1",
+    "command2",
+    "command3"
+]
+
+# Confluence credentials
+confluence_username = "your_confluence_username"
+confluence_password = "your_confluence_password"
+confluence_page_id = "your_confluence_page_id"
+
+def run_commands_and_upload_to_confluence():
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    pdf_file_name = f"output_{current_datetime}.pdf"
+
+    # Execute Linux commands and capture output
+    command_output = []
+    for cmd in linux_commands:
+        output = subprocess.getoutput(cmd)
+        command_output.append(f"Command: {cmd}\n\n{output}\n\n")
+
+    # Create a PDF document and write command outputs to it
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.multi_cell(0, 10, "\n".join(command_output))
+
+    # Output the PDF to a file
+    pdf.output(pdf_file_name)
+
+    # Upload the PDF file to Confluence
+    confluence_url = f"https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME"
+    headers = {"X-Atlassian-Token": "no-check"}
+    files = {"file": (pdf_file_name, open(pdf_file_name, "rb"))}
+    auth = (confluence_username, confluence_password)
+
+    response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
+    if response.status_code == 200:
+        print("File uploaded successfully to Confluence!")
+    else:
+        print("Failed to upload file to Confluence.")
+
+    # Remove the temporary PDF file
+    subprocess.run(["rm", pdf_file_name])
+
+# Schedule the task to run at a specific time, e.g., every day at 9 AM
+schedule.every().day.at("09:00").do(run_commands_and_upload_to_confluence)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
