@@ -1,0 +1,47 @@
+import subprocess
+import datetime
+import pdfkit
+import requests
+
+# Replace these with your Confluence credentials and settings
+confluence_username = "your_confluence_username"
+confluence_password = "your_confluence_password"
+confluence_site = "https://your-confluence-site"
+confluence_page_id = "your_confluence_page_id"
+
+# Define the Linux commands to run
+linux_commands = [
+    "ls -l",
+    "df -h",
+    "uptime",
+]
+
+# Create a timestamp for the PDF file
+current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+pdf_filename = f"command_output_{current_datetime}.pdf"
+
+# Execute Linux commands and capture output
+output_text = ""
+for command in linux_commands:
+    output_text += f"Command: {command}\n"
+    output_text += subprocess.getoutput(command) + "\n\n"
+
+# Save the output to a text file
+with open("output.txt", "w") as text_file:
+    text_file.write(output_text)
+
+# Generate a PDF from the text file
+pdfkit.from_file("output.txt", pdf_filename)
+
+# Upload the PDF to Confluence
+headers = {"X-Atlassian-Token": "no-check"}
+files = {"file": (pdf_filename, open(pdf_filename, "rb"))}
+auth = (confluence_username, confluence_password)
+
+upload_url = f"{confluence_site}/rest/api/content/{confluence_page_id}/child/attachment"
+response = requests.post(upload_url, headers=headers, files=files, auth=auth)
+
+if response.status_code == 200:
+    print("File uploaded successfully to Confluence!")
+else:
+    print("Failed to upload file to Confluence.")
