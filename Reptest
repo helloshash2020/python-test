@@ -1,0 +1,47 @@
+import schedule
+import time
+import subprocess
+import datetime
+import requests
+
+# Linux command to execute
+linux_command = "your_linux_command_here"
+
+# Confluence credentials
+confluence_username = "your_confluence_username"
+confluence_password = "your_confluence_password"
+confluence_page_id = "your_confluence_page_id"
+
+def run_task():
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    output_file = f"output_{current_datetime}.txt"
+
+    # Execute Linux command and capture output
+    command_output = subprocess.getoutput(linux_command)
+    
+    # Write output to a file
+    with open(output_file, "w") as file:
+        file.write(command_output)
+
+    # Upload the output file to Confluence
+    confluence_url = f"https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME"
+    headers = {"X-Atlassian-Token": "no-check"}
+    files = {"file": (output_file, open(output_file, "rb"))}
+    auth = (confluence_username, confluence_password)
+    
+    response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
+    if response.status_code == 200:
+        print("File uploaded successfully to Confluence!")
+    else:
+        print("Failed to upload file to Confluence.")
+
+    # Remove the temporary output file
+    subprocess.run(["rm", output_file])
+
+# Schedule the task to run every 4 hours
+schedule.every(4).hours.do(run_task)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
