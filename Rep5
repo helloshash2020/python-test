@@ -1,0 +1,94 @@
+import schedule
+import time
+import psycopg2
+import pdfkit
+import datetime
+import requests
+
+# PostgreSQL connection settings
+db_host = "your_db_host"
+db_port = "your_db_port"
+db_name = "your_db_name"
+db_user = "your_db_user"
+db_password = "your_db_password"
+
+# Confluence credentials
+confluence_username = "your_confluence_username"
+confluence_password = "your_confluence_password"
+confluence_page_id = "your_confluence_page_id"
+
+# Define the SQL queries you want to run
+sql_queries = [
+    "SELECT * FROM your_table_name WHERE some_condition;",
+    "SELECT * FROM another_table;",
+    # Add more queries as needed
+]
+
+def run_queries_and_generate_pdf():
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    pdf_filename = f"query_results_{current_datetime}.pdf"
+
+    # Connect to the PostgreSQL database
+    connection = psycopg2.connect(
+        host=db_host,
+        port=db_port,
+        dbname=db_name,
+        user=db_user,
+        password=db_password
+    )
+
+    try:
+        with connection.cursor() as cursor:
+            pdf_content = "<html><head></head><body>"
+
+            for query in sql_queries:
+                cursor.execute(query)
+                result = cursor.fetchall()
+
+                pdf_content += f"<h2>Query Results</h2>"
+                pdf_content += f"<pre>{query}</pre>"
+
+                if result:
+                    pdf_content += "<table border='1'>"
+                    pdf_content += "<tr>"
+                    for column in cursor.description:
+                        pdf_content += f"<th>{column.name}</th>"
+                    pdf_content += "</tr>"
+
+                    for row in result:
+                        pdf_content += "<tr>"
+                        for value in row:
+                            pdf_content += f"<td>{value}</td>"
+                        pdf_content += "</tr>"
+
+                    pdf_content += "</table>"
+                else:
+                    pdf_content += "<p>No results found.</p>"
+
+            pdf_content += "</body></html>"
+
+            # Generate PDF
+            pdfkit.from_string(pdf_content, pdf_filename)
+
+            # Upload the PDF to Confluence
+            confluence_url = f"https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME"
+            headers = {"X-Atlassian-Token": "no-check"}
+            files = {"file": (pdf_filename, open(pdf_filename, "rb"))}
+            auth = (confluence_username, confluence_password)
+
+            response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
+            if response.status_code == 200:
+                print("PDF uploaded successfully to Confluence!")
+            else:
+                print("Failed to upload PDF to Confluence.")
+
+    finally:
+        connection.close()
+
+# Schedule the task to run at your desired interval (e.g., every 4 hours)
+schedule.every(4).hours.do(run_queries_and_generate_pdf)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
