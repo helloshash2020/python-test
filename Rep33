@@ -1,7 +1,6 @@
 import psycopg2
 import pandas as pd
 import logging
-from datetime import datetime
 
 # Configure logging
 logging.basicConfig(filename='pg_replication.log', level=logging.INFO,
@@ -34,10 +33,10 @@ try:
     # Create dataframes from the query results
     replication_slots_df = pd.DataFrame(replication_slots_data, columns=replication_slots_columns)
 
-    # Convert datetime columns with timezones to timezone-naive format
+    # Convert datetime columns with timezones to string format
     for col in replication_slots_df.columns:
-        if 'timestamp' in str(replication_slots_df[col].dtype):
-            replication_slots_df[col] = replication_slots_df[col].apply(lambda x: x.replace(tzinfo=None) if x else None)
+        if replication_slots_df[col].dtype == 'datetime64[ns, tz]':
+            replication_slots_df[col] = replication_slots_df[col].dt.strftime('%Y-%m-%d %H:%M:%S')
 
     stat_replication_df = pd.DataFrame(stat_replication_data, columns=stat_replication_columns)
 
