@@ -1,0 +1,48 @@
+import psycopg2
+import pandas as pd
+import logging
+
+# Configure logging
+logging.basicConfig(filename='pg_replication.log', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s: %(message)s')
+
+# PostgreSQL connection parameters
+db_params = {
+    'dbname': 'your_database_name',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'your_host',
+    'port': 'your_port'
+}
+
+# Connect to the PostgreSQL database
+try:
+    conn = psycopg2.connect(**db_params)
+    cursor = conn.cursor()
+
+    # Query pg_replication_slots
+    cursor.execute("SELECT * FROM pg_replication_slots")
+    replication_slots_data = cursor.fetchall()
+
+    # Query pg_stat_replication
+    cursor.execute("SELECT * FROM pg_stat_replication")
+    stat_replication_data = cursor.fetchall()
+
+    # Create dataframes from the query results
+    replication_slots_df = pd.DataFrame(replication_slots_data, columns=[desc[0] for desc in cursor.description])
+    stat_replication_df = pd.DataFrame(stat_replication_data, columns=[desc[0] for desc in cursor.description])
+
+    # Save data to an Excel file
+    with pd.ExcelWriter('pg_replication_data.xlsx', engine='openpyxl') as writer:
+        replication_slots_df.to_excel(writer, sheet_name='Replication Slots', index=False)
+        stat_replication_df.to_excel(writer, sheet_name='Stat Replication', index=False)
+
+    logging.info('Data fetched and saved to Excel successfully.')
+
+except Exception as e:
+    logging.error(f'Error: {str(e)}')
+
+finally:
+    if conn:
+        cursor.close()
+        conn.close()
