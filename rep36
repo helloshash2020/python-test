@@ -1,0 +1,46 @@
+import psycopg2
+import pandas as pd
+
+# PostgreSQL database connection parameters
+db_params = {
+    "host": "your_database_host",
+    "port": "your_database_port",
+    "database": "your_database_name",
+    "user": "your_database_user",
+    "password": "your_database_password",
+}
+
+# Connect to the PostgreSQL database
+try:
+    conn = psycopg2.connect(**db_params)
+except psycopg2.Error as e:
+    print("Error: Unable to connect to the database")
+    print(e)
+    exit(1)
+
+# SQL queries to fetch replication slot and replication status information
+replication_slot_query = "SELECT * FROM pg_replication_slots"
+replication_status_query = "SELECT * FROM pg_stat_replication"
+
+# Fetch data from PostgreSQL and store it in DataFrames
+try:
+    replication_slots = pd.read_sql(replication_slot_query, conn)
+    replication_status = pd.read_sql(replication_status_query, conn)
+except psycopg2.Error as e:
+    print("Error: Unable to fetch data from PostgreSQL")
+    print(e)
+    conn.close()
+    exit(1)
+
+# Create an Excel writer object
+excel_writer = pd.ExcelWriter("replication_info.xlsx", engine="openpyxl")
+
+# Write DataFrames to the Excel sheet
+replication_slots.to_excel(excel_writer, sheet_name="ReplicationSlots", index=False)
+replication_status.to_excel(excel_writer, sheet_name="ReplicationStatus", index=False)
+
+# Save the Excel file
+excel_writer.save()
+
+# Close the database connection
+conn.close()
