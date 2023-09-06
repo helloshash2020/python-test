@@ -43,9 +43,9 @@ def fetch_data_and_save_to_excel():
         replication_slots_df = pd.DataFrame(replication_slots_data, columns=replication_slots_columns)
         stat_replication_df = pd.DataFrame(stat_replication_data, columns=stat_replication_columns)
 
-        # Convert datetime columns with timezones to timezone-naive format
-        replication_slots_df['timestamp_column'] = replication_slots_df['timestamp_column'].apply(lambda x: x.replace(tzinfo=None) if x else None)
-        stat_replication_df['timestamp_column'] = stat_replication_df['timestamp_column'].apply(lambda x: x.replace(tzinfo=None) if x else None)
+        # Replace NULL values with 'NULL'
+        replication_slots_df.fillna('NULL', inplace=True)
+        stat_replication_df.fillna('NULL', inplace=True)
 
         # Save data to an Excel file with a timestamp in the filename
         timestamp = time.strftime("%Y%m%d%H%M%S")
