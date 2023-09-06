@@ -1,0 +1,78 @@
+import psycopg2
+import pandas as pd
+import schedule
+import time
+import datetime
+import socket
+import openpyxl
+import requests
+import logging
+
+# Configure logging
+logging.basicConfig(filename='query_execution.log', level=logging.INFO)
+
+# Function to execute SQL queries and save to Excel
+def execute_queries_and_save():
+    try:
+        # PostgreSQL connection details
+        db_params = {
+            'dbname': 'your_db_name',
+            'user': 'your_db_user',
+            'password': 'your_db_password',
+            'host': 'your_db_host',
+            'port': 'your_db_port',
+        }
+
+        # List of SQL queries
+        sql_queries = [
+            "SELECT column1, column2 FROM table1;",
+            "SELECT column3, column4 FROM table2;",
+        ]
+
+        # Connect to the database
+        conn = psycopg2.connect(**db_params)
+
+        # Create a Pandas Excel writer
+        current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        excel_file = f"query_results_{current_datetime}.xlsx"
+        writer = pd.ExcelWriter(excel_file, engine='openpyxl')
+
+        for idx, query in enumerate(sql_queries):
+            # Execute the SQL query
+            result = pd.read_sql_query(query, conn)
+
+            # Write the result to Excel
+            result.to_excel(writer, sheet_name=f"Query_{idx+1}", index=False)
+        
+        # Save Excel file
+        writer.save()
+        
+        # Close database connection
+        conn.close()
+
+        # Log success
+        logging.info(f"Queries executed and saved to {excel_file}")
+        
+        # Upload Excel file to Confluence
+        confluence_url = 'https://your-confluence-site/rest/api/content/PAGE_ID/child/ATTACHMENT_NAME'
+        headers = {"X-Atlassian-Token": "no-check"}
+        files = {"file": (excel_file, open(excel_file, "rb"))}
+        auth = ('your_confluence_username', 'your_confluence_password')
+
+        response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
+        if response.status_code == 200:
+            logging.info("Excel file uploaded to Confluence successfully!")
+        else:
+            logging.error("Failed to upload Excel file to Confluence.")
+
+    except Exception as e:
+        # Log error
+        logging.error(f"An error occurred: {str(e)}")
+
+# Schedule the task to run every minute
+schedule.every(1).minutes.do(execute_queries_and_save)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
