@@ -1,0 +1,94 @@
+import schedule
+import time
+import psycopg2
+import pandas as pd
+from openpyxl import Workbook
+import datetime
+import socket
+import logging
+import requests
+
+# Configure logging
+logging.basicConfig(filename='query_log.txt', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s: %(message)s')
+
+# PostgreSQL connection parameters
+db_params = {
+    'dbname': 'your_database_name',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'your_database_host',
+    'port': 'your_database_port'
+}
+
+# Define your SQL queries
+queries = [
+    {
+        'name': 'query_1',
+        'sql': 'SELECT * FROM your_table_1'
+    },
+    {
+        'name': 'query_2',
+        'sql': 'SELECT * FROM your_table_2'
+    }
+]
+
+# Confluence credentials
+confluence_username = 'your_confluence_username'
+confluence_password = 'your_confluence_password'
+confluence_page_id = 'your_confluence_page_id'
+
+def run_queries_and_generate_report():
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    host_name = socket.gethostname()
+
+    # Create a Pandas DataFrame to store query results
+    df = pd.DataFrame()
+
+    try:
+        # Connect to the PostgreSQL database
+        conn = psycopg2.connect(**db_params)
+
+        for query in queries:
+            cursor = conn.cursor()
+            cursor.execute(query['sql'])
+            query_result = cursor.fetchall()
+            cursor.close()
+
+            # Create a DataFrame from the query result
+            df_query = pd.DataFrame(query_result, columns=[desc[0] for desc in cursor.description])
+            df_query.to_excel(f'{query["name"]}_{current_datetime}.xlsx', sheet_name=query['name'], index=False)
+            df = pd.concat([df, df_query], axis=1)
+
+        conn.close()
+
+        # Save the combined results to an Excel file
+        writer = pd.ExcelWriter(f'report_{current_datetime}.xlsx', engine='xlsxwriter')
+        df.to_excel(writer, sheet_name='Combined_Data', index=False)
+        writer.save()
+
+        # Log success
+        logging.info(f'Report generated at {current_datetime} on host {host_name}')
+
+        # Upload the log to Confluence
+        confluence_url = f'https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME'
+        headers = {"X-Atlassian-Token": "no-check"}
+        files = {"file": ("query_log.txt", open("query_log.txt", "rb"))}
+        auth = (confluence_username, confluence_password)
+
+        response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
+        if response.status_code == 200:
+            logging.info("Log file uploaded to Confluence successfully!")
+        else:
+            logging.error("Failed to upload log file to Confluence.")
+
+    except Exception as e:
+        logging.error(f'Error: {str(e)}')
+
+# Schedule the task to run every minute
+schedule.every(1).minutes.do(run_queries_and_generate_report)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
