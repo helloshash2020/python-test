@@ -1,0 +1,91 @@
+import psycopg2
+import openpyxl
+import schedule
+import time
+import requests
+import datetime
+import socket
+
+# Database connection parameters
+db_params = {
+    "dbname": "your_db_name",
+    "user": "your_db_user",
+    "password": "your_db_password",
+    "host": "your_db_host",
+    "port": "your_db_port",
+}
+
+# SQL queries to run
+sql_queries = [
+    "SELECT * FROM table1;",
+    "SELECT * FROM table2;",
+]
+
+# Create an Excel workbook
+workbook = openpyxl.Workbook()
+sheet = workbook.active
+
+# Function to execute SQL queries, format results, and write to Excel
+def run_queries():
+    for i, query in enumerate(sql_queries):
+        # Connect to the database
+        conn = psycopg2.connect(**db_params)
+        cursor = conn.cursor()
+
+        # Execute the query
+        cursor.execute(query)
+
+        # Fetch column names
+        column_names = [desc[0] for desc in cursor.description]
+
+        # Fetch query results
+        results = cursor.fetchall()
+
+        # Write column names as headers with smaller font
+        sheet.cell(row=1, column=i * 2 + 1, value="Query " + str(i + 1)).font = openpyxl.styles.Font(size=9)
+        for j, col_name in enumerate(column_names):
+            sheet.cell(row=2, column=i * 2 + j + 1, value=col_name).font = openpyxl.styles.Font(size=9)
+
+        # Write query results
+        for row_num, row_data in enumerate(results, start=3):
+            for col_num, cell_value in enumerate(row_data, start=i * 2 + 1):
+                sheet.cell(row=row_num, column=col_num, value=cell_value)
+
+        # Close the database connection
+        cursor.close()
+        conn.close()
+
+        # Add a gap between query results
+        sheet.column_dimensions[openpyxl.utils.get_column_letter((i + 1) * 2)].width = 2
+
+    # Add datetime and server hostname
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    hostname = socket.gethostname()
+    sheet.cell(row=1, column=len(sql_queries) * 2 + 1, value="Datetime").font = openpyxl.styles.Font(size=9)
+    sheet.cell(row=2, column=len(sql_queries) * 2 + 1, value=current_datetime).font = openpyxl.styles.Font(size=9)
+    sheet.cell(row=1, column=len(sql_queries) * 2 + 2, value="Hostname").font = openpyxl.styles.Font(size=9)
+    sheet.cell(row=2, column=len(sql_queries) * 2 + 2, value=hostname).font = openpyxl.styles.Font(size=9)
+
+    # Save the Excel file
+    file_name = f"query_results_{current_datetime.replace(':', '-')}.xlsx"
+    workbook.save(file_name)
+
+    # Upload the Excel file to Confluence
+    confluence_url = "https://your-confluence-site/rest/api/content/PAGE_ID/child/ATTACHMENT_NAME"
+    auth = ("your_confluence_username", "your_confluence_password")
+    headers = {"X-Atlassian-Token": "no-check"}
+    files = {"file": (file_name, open(file_name, "rb"))}
+
+    response = requests.post(confluence_url, auth=auth, headers=headers, files=files)
+    if response.status_code == 200:
+        print(f"File {file_name} uploaded successfully to Confluence!")
+    else:
+        print(f"Failed to upload file {file_name} to Confluence.")
+
+# Schedule the script to run every minute
+schedule.every(1).minutes.do(run_queries)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
