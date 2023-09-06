@@ -1,0 +1,98 @@
+import psycopg2
+import pandas as pd
+import requests
+import time
+import logging
+import schedule
+
+# Configure logging
+logging.basicConfig(filename='pg_replication.log', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s: %(message)s')
+
+# PostgreSQL connection parameters
+db_params = {
+    'dbname': 'your_database_name',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'your_host',
+    'port': 'your_port'
+}
+
+# Confluence API parameters
+confluence_url = 'https://your-confluence-site/wiki/rest/api/content/PAGE_ID/child/attachment'
+confluence_username = 'your_confluence_username'  # Replace with your Confluence username
+confluence_password = 'your_confluence_password'  # Replace with your Confluence password
+page_id = 'PAGE_ID'  # Replace with the ID of the Confluence page where you want to upload the file
+
+def fetch_data_and_save_to_excel():
+    try:
+        conn = psycopg2.connect(**db_params)
+        cursor = conn.cursor()
+
+        # Query all columns from pg_replication_slots
+        cursor.execute("SELECT * FROM pg_replication_slots")
+        replication_slots_data = cursor.fetchall()
+        replication_slots_columns = [desc[0] for desc in cursor.description]
+
+        # Query all columns from pg_stat_replication
+        cursor.execute("SELECT * FROM pg_stat_replication")
+        stat_replication_data = cursor.fetchall()
+        stat_replication_columns = [desc[0] for desc in cursor.description]
+
+        # Create dataframes from the query results
+        replication_slots_df = pd.DataFrame(replication_slots_data, columns=replication_slots_columns)
+        stat_replication_df = pd.DataFrame(stat_replication_data, columns=stat_replication_columns)
+
+        # Convert datetime columns with timezones to timezone-naive format
+        replication_slots_df['timestamp_column'] = replication_slots_df['timestamp_column'].apply(lambda x: x.replace(tzinfo=None) if x else None)
+        stat_replication_df['timestamp_column'] = stat_replication_df['timestamp_column'].apply(lambda x: x.replace(tzinfo=None) if x else None)
+
+        # Save data to an Excel file with a timestamp in the filename
+        timestamp = time.strftime("%Y%m%d%H%M%S")
+        excel_filename = f'pg_replication_data_{timestamp}.xlsx'
+
+        with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
+            replication_slots_df.to_excel(writer, sheet_name='Replication Slots', index=False)
+            stat_replication_df.to_excel(writer, sheet_name='Stat Replication', index=False)
+
+        logging.info('Data fetched and saved to Excel successfully.')
+
+        # Upload the Excel file to Confluence
+        upload_to_confluence(excel_filename)
+
+    except Exception as e:
+        logging.error(f'Error: {str(e)}')
+
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
+
+def upload_to_confluence(filename):
+    headers = {
+        'X-Atlassian-Token': 'nocheck'
+    }
+
+    # Prepare the URL for uploading the attachment
+    api_url = confluence_url.replace('PAGE_ID', page_id)
+
+    # Open and upload the Excel file
+    with open(filename, 'rb') as file:
+        response = requests.post(
+            api_url,
+            headers=headers,
+            files={'file': (filename, file)},
+            auth=(confluence_username, confluence_password)
+        )
+
+    if response.status_code == 200:
+        print('File uploaded successfully to Confluence.')
+    else:
+        print('Error uploading file to Confluence:', response.status_code)
+
+# Schedule the script to run every 2 minutes
+schedule.every(2).minutes.do(fetch_data_and_save_to_excel)
+
+while True:
+    schedule.run_pending()
+    time.sleep(1)
