@@ -4,10 +4,15 @@ import requests
 import time
 import logging
 import schedule
+import os
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(filename='pg_replication.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s: %(message)s')
+
+# Directory where Excel files are stored
+excel_dir = 'excel_files'  # Replace with your desired directory
 
 # PostgreSQL connection parameters
 db_params = {
@@ -49,7 +54,7 @@ def fetch_data_and_save_to_excel():
 
         # Save data to an Excel file with a timestamp in the filename
         timestamp = time.strftime("%Y%m%d%H%M%S")
-        excel_filename = f'pg_replication_data_{timestamp}.xlsx'
+        excel_filename = os.path.join(excel_dir, f'pg_replication_data_{timestamp}.xlsx')
 
         with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
             replication_slots_df.to_excel(writer, sheet_name='Replication Slots', index=False)
@@ -59,6 +64,9 @@ def fetch_data_and_save_to_excel():
 
         # Upload the Excel file to Confluence
         upload_to_confluence(excel_filename)
+
+        # Clean up old files
+        cleanup_old_files(excel_dir)
 
     except Exception as e:
         logging.error(f'Error: {str(e)}')
@@ -89,6 +97,24 @@ def upload_to_confluence(filename):
         print('File uploaded successfully to Confluence.')
     else:
         print('Error uploading file to Confluence:', response.status_code)
+
+def cleanup_old_files(directory):
+    # Define the maximum age (in days) for files to be retained
+    max_age_days = 7  # Adjust this as needed
+
+    # Calculate the cutoff date
+    cutoff_date = datetime.now() - timedelta(days=max_age_days)
+
+    # List files in the directory
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            file_modified_time = datetime.fromtimestamp(os.path.getmtime(file_path))
+
+            # Remove files older than the cutoff date
+            if file_modified_time < cutoff_date:
+                os.remove(file_path)
+                logging.info(f'Removed old file: {file_path}')
 
 # Schedule the script to run every 2 minutes
 schedule.every(2).minutes.do(fetch_data_and_save_to_excel)
