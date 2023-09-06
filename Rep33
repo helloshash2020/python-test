@@ -1,15 +1,9 @@
-import schedule
-import time
 import psycopg2
 import pandas as pd
-import datetime
-import socket
 import logging
-import requests
-import os
 
 # Configure logging
-logging.basicConfig(filename='query_log.txt', level=logging.INFO,
+logging.basicConfig(filename='pg_replication.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s: %(message)s')
 
 # PostgreSQL connection parameters
@@ -17,91 +11,40 @@ db_params = {
     'dbname': 'your_database_name',
     'user': 'your_username',
     'password': 'your_password',
-    'host': 'your_database_host',
-    'port': 'your_database_port'
+    'host': 'your_host',
+    'port': 'your_port'
 }
 
-# Define your SQL queries and sheet names
-queries = [
-    {
-        'name': 'query_1',
-        'sql': 'SELECT * FROM your_table_1',
-    },
-    {
-        'name': 'query_2',
-        'sql': 'SELECT * FROM your_table_2',
-    },
-]
+# Connect to the PostgreSQL database
+try:
+    conn = psycopg2.connect(**db_params)
+    cursor = conn.cursor()
 
-# Confluence credentials
-confluence_username = 'your_confluence_username'
-confluence_password = 'your_confluence_password'
-confluence_page_id = 'your_confluence_page_id'
+    # Query all columns from pg_replication_slots
+    cursor.execute("SELECT * FROM pg_replication_slots")
+    replication_slots_data = cursor.fetchall()
+    replication_slots_columns = [desc[0] for desc in cursor.description]
 
-# Output directory
-output_dir = 'reports'
+    # Query all columns from pg_stat_replication
+    cursor.execute("SELECT * FROM pg_stat_replication")
+    stat_replication_data = cursor.fetchall()
+    stat_replication_columns = [desc[0] for desc in cursor.description]
 
-def run_queries_and_generate_report():
-    current_datetime = datetime.datetime.now()
-    formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-    host_name = socket.gethostname()
+    # Create dataframes from the query results
+    replication_slots_df = pd.DataFrame(replication_slots_data, columns=replication_slots_columns)
+    stat_replication_df = pd.DataFrame(stat_replication_data, columns=stat_replication_columns)
 
-    try:
-        # Create an Excel writer
-        excel_file = f'{output_dir}/report_{formatted_datetime}.xlsx'
-        writer = pd.ExcelWriter(excel_file, engine='xlsxwriter')
+    # Save data to an Excel file
+    with pd.ExcelWriter('pg_replication_data.xlsx', engine='openpyxl') as writer:
+        replication_slots_df.to_excel(writer, sheet_name='Replication Slots', index=False)
+        stat_replication_df.to_excel(writer, sheet_name='Stat Replication', index=False)
 
-        for query in queries:
-            # Connect to the PostgreSQL database
-            conn = psycopg2.connect(**db_params)
-            cursor = conn.cursor()
+    logging.info('Data fetched and saved to Excel successfully.')
 
-            # Execute the SQL query
-            cursor.execute(query['sql'])
-            query_result = cursor.fetchall()
-            cursor.close()
-            conn.close()
+except Exception as e:
+    logging.error(f'Error: {str(e)}')
 
-            # Create a DataFrame from the query result
-            df_query = pd.DataFrame(query_result, columns=[desc[0] for desc in cursor.description])
-
-            # Format the timestamp column to a string
-            df_query['timestamp_column_name'] = df_query['timestamp_column_name'].dt.strftime("%Y-%m-%d %H:%M:%S")
-
-            # Write the DataFrame to the Excel file
-            df_query.to_excel(writer, sheet_name=query['name'], index=False)
-
-        # Save the Excel file
-        writer.save()
-
-        # Log success
-        logging.info(f'Report generated at {formatted_datetime} on host {host_name}')
-
-        # Upload the Excel file to Confluence
-        confluence_url = f'https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME'
-        headers = {"X-Atlassian-Token": "no-check"}
-        files = {"file": (os.path.basename(excel_file), open(excel_file, "rb"))}
-        auth = (confluence_username, confluence_password)
-
-        response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
-        if response.status_code == 200:
-            logging.info("Excel file uploaded to Confluence successfully!")
-        else:
-            logging.error("Failed to upload Excel file to Confluence.")
-
-        # Remove the old Excel file
-        os.remove(excel_file)
-
-    except Exception as e:
-        logging.error(f'Error: {str(e)}')
-
-# Schedule the task to run every 2 minutes
-schedule.every(2).minutes.do(run_queries_and_generate_report)
-
-# Create the output directory if it doesn't exist
-os.makedirs(output_dir, exist_ok=True)
-
-# Infinite loop to keep the script running
-while True:
-    schedule.run_pending()
-    time.sleep(1)
+finally:
+    if conn:
+        cursor.close()
+        conn.close()
