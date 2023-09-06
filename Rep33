@@ -34,11 +34,12 @@ try:
     replication_slots_df = pd.DataFrame(replication_slots_data, columns=replication_slots_columns)
 
     # Convert datetime columns with timezones to string format
-    for col in replication_slots_df.columns:
-        if replication_slots_df[col].dtype == 'datetime64[ns, tz]':
-            replication_slots_df[col] = replication_slots_df[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+    replication_slots_df['timestamp_column'] = replication_slots_df['timestamp_column'].astype(str)  # Replace 'timestamp_column' with the actual datetime column name
 
     stat_replication_df = pd.DataFrame(stat_replication_data, columns=stat_replication_columns)
+
+    # Convert datetime columns with timezones to string format
+    stat_replication_df['timestamp_column'] = stat_replication_df['timestamp_column'].astype(str)  # Replace 'timestamp_column' with the actual datetime column name
 
     # Save data to an Excel file
     with pd.ExcelWriter('pg_replication_data.xlsx', engine='openpyxl') as writer:
