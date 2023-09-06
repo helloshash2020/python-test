@@ -6,7 +6,7 @@ import datetime
 import socket
 import logging
 import requests
-import os
+from openpyxl import Workbook
 
 # Configure logging
 logging.basicConfig(filename='query_log.txt', level=logging.INFO,
@@ -24,12 +24,12 @@ db_params = {
 # Define your SQL queries
 queries = [
     {
-        'name': 'Query 1',
-        'sql': 'SELECT * FROM your_table_1'
+        'name': 'pg_replication_slots',
+        'sql': 'SELECT * FROM pg_replication_slots'
     },
     {
-        'name': 'Query 2',
-        'sql': 'SELECT * FROM your_table_2'
+        'name': 'pg_stat_replication',
+        'sql': 'SELECT * FROM pg_stat_replication'
     }
 ]
 
@@ -39,8 +39,7 @@ confluence_password = 'your_confluence_password'
 confluence_page_id = 'your_confluence_page_id'
 
 def run_queries_and_generate_report():
-    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    formatted_time = datetime.datetime.now().strftime("%H:%M:%S")
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     host_name = socket.gethostname()
 
     # Create a Pandas DataFrame to store query results
@@ -59,21 +58,29 @@ def run_queries_and_generate_report():
             # Create a DataFrame from the query result
             df_query = pd.DataFrame(query_result, columns=[desc[0] for desc in cursor.description])
 
-            # Add the formatted time to the DataFrame
-            df_query['Timestamp'] = formatted_time
+            # Strip datetime to hour, minute, and second
+            df_query['timestamp'] = df_query['timestamp'].dt.strftime("%H:%M:%S")
 
-            df = pd.concat([df, df_query])
+            df_query['query_name'] = query['name']
+            df = pd.concat([df, df_query], ignore_index=True)
 
         conn.close()
 
-        # Create an Excel file
+        # Create an Excel file with datetime and hostname
         file_name = f'report_{current_datetime}_{host_name}.xlsx'
-        df.to_excel(file_name, index=False)
+        writer = pd.ExcelWriter(file_name, engine='openpyxl')
+        writer.book = Workbook()
+
+        # Write the DataFrame to a single sheet
+        df.to_excel(writer, sheet_name='QueryResults', index=False)
+
+        # Save and close the Excel file
+        writer.save()
 
         # Log success
         logging.info(f'Report generated at {current_datetime} on host {host_name}')
 
-        # Upload the file to Confluence
+        # Upload the Excel file to Confluence
         confluence_url = f'https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME'
         headers = {"X-Atlassian-Token": "no-check"}
         files = {"file": (file_name, open(file_name, "rb"))}
@@ -82,9 +89,11 @@ def run_queries_and_generate_report():
         response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
         if response.status_code == 200:
             logging.info("File uploaded to Confluence successfully!")
-
-        # Remove the old Excel file
-        os.remove(file_name)
+            # Remove the old Excel file
+            import os
+            os.remove(file_name)
+        else:
+            logging.error("Failed to upload file to Confluence.")
 
     except Exception as e:
         logging.error(f'Error: {str(e)}')
