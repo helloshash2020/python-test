@@ -1,0 +1,81 @@
+import psycopg2
+import schedule
+import time
+import datetime
+import requests
+
+# Database connection parameters
+db_params = {
+    'dbname': 'your_database_name',
+    'user': 'your_database_user',
+    'password': 'your_database_password',
+    'host': 'your_database_host',
+    'port': 'your_database_port'
+}
+
+# List of SQL queries to run
+sql_queries = [
+    "SELECT * FROM table1 LIMIT 12;",
+    "SELECT * FROM table2 LIMIT 12;",
+    # Add more queries as needed
+]
+
+# Confluence credentials
+confluence_username = "your_confluence_username"
+confluence_password = "your_confluence_password"
+confluence_page_id = "your_confluence_page_id"
+
+# Function to run SQL queries and format results
+def run_sql_queries():
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    output_file = f"output_{current_datetime}.txt"
+    output = []
+
+    try:
+        conn = psycopg2.connect(**db_params)
+        cursor = conn.cursor()
+
+        for query in sql_queries:
+            cursor.execute(query)
+            result = cursor.fetchall()
+
+            # Format query results with proper alignment
+            header = [desc[0] for desc in cursor.description]
+            formatted_result = [header] + list(result)
+
+            output.append(f"Query: {query}\n")
+            output.append("\n".join(["\t".join(map(str, row)) for row in formatted_result]))
+            output.append("\n" + "-" * 50 + "\n")
+
+        # Write formatted results to a file
+        with open(output_file, "w") as file:
+            file.write("\n".join(output))
+
+        # Upload the output file to Confluence
+        confluence_url = f"https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME"
+        headers = {"X-Atlassian-Token": "no-check"}
+        files = {"file": (output_file, open(output_file, "rb"))}
+        auth = (confluence_username, confluence_password)
+        
+        response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
+        if response.status_code == 200:
+            print("File uploaded successfully to Confluence!")
+        else:
+            print("Failed to upload file to Confluence.")
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# Schedule the task to run every minute
+schedule.every(1).minutes.do(run_sql_queries)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
