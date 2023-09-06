@@ -1,0 +1,82 @@
+import psycopg2
+import schedule
+import time
+import datetime
+import requests
+
+# PostgreSQL database connection settings
+db_host = "your_db_host"
+db_port = "your_db_port"
+db_name = "your_db_name"
+db_user = "your_db_user"
+db_password = "your_db_password"
+
+# Define your PostgreSQL queries
+queries = [
+    "SELECT * FROM table1;",
+    "SELECT * FROM table2;",
+]
+
+# Confluence credentials
+confluence_username = "your_confluence_username"
+confluence_password = "your_confluence_password"
+confluence_page_id = "your_confluence_page_id"
+
+# Function to execute queries and format results
+def run_queries():
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    output_file = f"query_output_{current_datetime}.txt"
+
+    # Establish a PostgreSQL database connection
+    conn = psycopg2.connect(
+        host=db_host,
+        port=db_port,
+        dbname=db_name,
+        user=db_user,
+        password=db_password
+    )
+
+    with open(output_file, "w") as file:
+        for query in queries:
+            # Execute the query
+            cursor = conn.cursor()
+            cursor.execute(query)
+            
+            # Fetch and format the results with headers
+            columns = [desc[0] for desc in cursor.description]
+            results = cursor.fetchall()
+
+            # Write the query result with proper alignment
+            file.write(f"Query: {query}\n")
+            file.write("{:<15} {:<15} {:<15}\n".format(*columns))  # Header
+            file.write("-" * 45 + "\n")  # Separator
+
+            for row in results:
+                file.write("{:<15} {:<15} {:<15}\n".format(*row))
+            
+            file.write("\n")  # Gap between queries
+            
+            cursor.close()
+
+    # Close the database connection
+    conn.close()
+
+    # Upload the output file to Confluence
+    confluence_url = f"https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME"
+    headers = {"X-Atlassian-Token": "no-check"}
+    files = {"file": (output_file, open(output_file, "rb"))}
+    auth = (confluence_username, confluence_password)
+
+    response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
+    if response.status_code == 200:
+        print("File uploaded successfully to Confluence!")
+    else:
+        print("Failed to upload file to Confluence.")
+
+# Schedule the task to run every minute
+schedule.every(1).minutes.do(run_queries)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
