@@ -1,0 +1,101 @@
+import schedule
+import time
+import psycopg2
+import pandas as pd
+from openpyxl import Workbook
+import datetime
+import socket
+import logging
+import requests
+import os
+
+# Configure logging
+logging.basicConfig(filename='query_log.txt', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s: %(message)s')
+
+# PostgreSQL connection parameters
+db_params = {
+    'dbname': 'your_database_name',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'your_database_host',
+    'port': 'your_database_port'
+}
+
+# Define your SQL queries
+queries = [
+    {
+        'name': 'Query_1',
+        'sql': 'SELECT * FROM your_table_1'
+    },
+    {
+        'name': 'Query_2',
+        'sql': 'SELECT * FROM your_table_2'
+    }
+]
+
+# Confluence credentials
+confluence_username = 'your_confluence_username'
+confluence_password = 'your_confluence_password'
+confluence_page_id = 'your_confluence_page_id'
+
+def run_queries_and_generate_report():
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+    host_name = socket.gethostname()
+
+    # Create a Pandas DataFrame to store query results
+    df = pd.DataFrame(columns=['Query Name', 'Result'])
+
+    try:
+        # Connect to the PostgreSQL database
+        conn = psycopg2.connect(**db_params)
+
+        for query in queries:
+            cursor = conn.cursor()
+            cursor.execute(query['sql'])
+            query_result = cursor.fetchall()
+            cursor.close()
+
+            # Convert query result to a DataFrame
+            df_query = pd.DataFrame(query_result)
+            df_query = df_query.applymap(lambda x: str(x).split()[0] if isinstance(x, datetime.date) else x)
+            df_query['Query Name'] = query['name']
+            df_query.columns = ['Result', 'Query Name']
+            df = df.append(df_query, ignore_index=True)
+
+        conn.close()
+
+        # Create a new Excel workbook and save the data
+        output_file = f'report_{current_datetime}_{host_name}.xlsx'
+        with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='Query Results', index=False)
+
+        # Log success
+        logging.info(f'Report generated at {current_datetime} on host {host_name}')
+
+        # Upload the Excel file to Confluence
+        confluence_url = f'https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME'
+        headers = {"X-Atlassian-Token": "no-check"}
+        files = {"file": (output_file, open(output_file, "rb"))}
+        auth = (confluence_username, confluence_password)
+
+        response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
+        if response.status_code == 200:
+            logging.info("Excel file uploaded to Confluence successfully!")
+        else:
+            logging.error("Failed to upload Excel file to Confluence.")
+
+        # Remove the old Excel file
+        if os.path.exists(output_file):
+            os.remove(output_file)
+
+    except Exception as e:
+        logging.error(f'Error: {str(e)}')
+
+# Schedule the task to run every 2 minutes
+schedule.every(2).minutes.do(run_queries_and_generate_report)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
