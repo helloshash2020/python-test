@@ -58,8 +58,10 @@ def run_queries_and_generate_report():
             # Create a DataFrame from the query result
             df_query = pd.DataFrame(query_result, columns=[desc[0] for desc in cursor.description])
 
-            # Strip datetime to hour, minute, and second
-            df_query['timestamp'] = df_query['timestamp'].dt.strftime("%H:%M:%S")
+            # Check if the 'timestamp' column exists
+            if 'timestamp' in df_query.columns:
+                # Strip datetime to hour, minute, and second
+                df_query['timestamp'] = df_query['timestamp'].dt.strftime("%H:%M:%S")
 
             df_query['query_name'] = query['name']
             df = pd.concat([df, df_query], ignore_index=True)
