@@ -1,0 +1,83 @@
+import psycopg2
+from fpdf import FPDF
+import schedule
+import time
+import requests
+import datetime
+
+# Database connection parameters
+db_params = {
+    "host": "your_db_host",
+    "database": "your_db_name",
+    "user": "your_db_user",
+    "password": "your_db_password"
+}
+
+# Confluence credentials
+confluence_username = "your_confluence_username"
+confluence_password = "your_confluence_password"
+confluence_page_id = "your_confluence_page_id"
+
+def run_queries_and_create_pdf():
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    pdf_filename = f"report_{current_datetime}.pdf"
+
+    # Establish a connection to the PostgreSQL database
+    try:
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+
+        # Replace with your SQL queries
+        query1 = "SELECT * FROM table1;"
+        query2 = "SELECT * FROM table2;"
+
+        # Execute the SQL queries
+        cursor.execute(query1)
+        result1 = cursor.fetchall()
+
+        cursor.execute(query2)
+        result2 = cursor.fetchall()
+
+        # Create a PDF report
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        
+        # Add query results to the PDF
+        pdf.cell(200, 10, txt="Query 1 Results:", ln=True)
+        for row in result1:
+            pdf.cell(200, 10, txt=str(row), ln=True)
+        
+        pdf.cell(200, 10, txt="Query 2 Results:", ln=True)
+        for row in result2:
+            pdf.cell(200, 10, txt=str(row), ln=True)
+
+        # Save the PDF file
+        pdf.output(pdf_filename)
+
+        # Upload the PDF file to Confluence
+        confluence_url = f"https://your-confluence-site/wiki/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME"
+        headers = {"X-Atlassian-Token": "no-check"}
+        files = {"file": (pdf_filename, open(pdf_filename, "rb"))}
+        auth = (confluence_username, confluence_password)
+
+        response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
+        if response.status_code == 200:
+            print("PDF report uploaded successfully to Confluence!")
+        else:
+            print("Failed to upload PDF report to Confluence.")
+
+        # Close the database connection
+        cursor.close()
+        connection.close()
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+# Schedule the task to run every 4 hours (adjust as needed)
+schedule.every(4).hours.do(run_queries_and_create_pdf)
+
+# Infinite loop to keep the script running
+while True:
+    schedule.run_pending()
+    time.sleep(1)
