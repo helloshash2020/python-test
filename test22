@@ -5,6 +5,7 @@ import datetime
 import socket
 import psycopg2
 import requests
+from tabulate import tabulate
 
 # Set your PostgreSQL connection parameters
 db_params = {
@@ -22,23 +23,19 @@ confluence_password = "your_password"
 # Directory to store data files
 data_directory = "data"
 
-# Function to fetch replication statistics and slots
+# Function to fetch replication statistics and slots and format them as a table
 def get_replication_stats():
     try:
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
 
-        # Get replication statistics with headers
+        # Get replication statistics
         cursor.execute("SELECT * FROM pg_stat_replication;")
         replication_stats = cursor.fetchall()
-        stats_columns = [desc[0] for desc in cursor.description]
-        replication_stats.insert(0, tuple(stats_columns))
 
-        # Get replication slots with headers
+        # Get replication slots
         cursor.execute("SELECT * FROM pg_replication_slots;")
         replication_slots = cursor.fetchall()
-        slots_columns = [desc[0] for desc in cursor.description]
-        replication_slots.insert(0, tuple(slots_columns))
 
         return replication_stats, replication_slots
     except Exception as e:
@@ -57,11 +54,15 @@ def write_to_file(data):
         file.write(f"Datetime: {current_datetime}\n")
         file.write(f"Hostname: {hostname}\n\n")
         file.write("Replication Statistics:\n")
-        for row in data[0]:
-            file.write(','.join(map(str, row)) + "\n")
-        file.write("\nReplication Slots:\n")
-        for row in data[1]:
-            file.write(','.join(map(str, row)) + "\n")
+        if data[0]:
+            file.write(tabulate(data[0], headers="keys", tablefmt="grid") + "\n\n")
+        else:
+            file.write("No Replication Statistics\n\n")
+        file.write("Replication Slots:\n")
+        if data[1]:
+            file.write(tabulate(data[1], headers="keys", tablefmt="grid") + "\n")
+        else:
+            file.write("No Replication Slots\n")
     
     return filename
 
