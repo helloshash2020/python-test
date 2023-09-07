@@ -1,0 +1,96 @@
+import os
+import schedule
+import time
+import datetime
+import socket
+import psycopg2
+import requests
+
+# Set your PostgreSQL connection parameters
+db_params = {
+    "host": "your_postgres_host",
+    "database": "your_database",
+    "user": "your_user",
+    "password": "your_password",
+}
+
+# Set the Confluence API endpoint and credentials
+confluence_url = "https://your-confluence-site/wiki/rest/api/content/YOUR_PAGE_ID"
+confluence_username = "your_username"
+confluence_password = "your_password"
+
+# Function to fetch replication statistics and slots
+def get_replication_stats():
+    try:
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+
+        # Get replication statistics
+        cursor.execute("SELECT * FROM pg_stat_replication;")
+        replication_stats = cursor.fetchall()
+
+        # Get replication slots
+        cursor.execute("SELECT * FROM pg_replication_slots;")
+        replication_slots = cursor.fetchall()
+
+        return replication_stats, replication_slots
+    except Exception as e:
+        print("Error fetching replication stats:", str(e))
+    finally:
+        if connection:
+            connection.close()
+
+# Function to write data to a text file for the current week
+def write_to_file(data):
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    current_week = datetime.datetime.now().strftime("%U")
+    hostname = socket.gethostname()
+    filename = f"replication_stats_week_{current_week}_{hostname}.txt"
+    
+    with open(filename, "a") as file:
+        file.write(f"Datetime: {current_datetime}\n")
+        file.write(f"Hostname: {hostname}\n\n")
+        file.write("Replication Statistics:\n")
+        for row in data[0]:
+            file.write(str(row) + "\n")
+        file.write("\nReplication Slots:\n")
+        for row in data[1]:
+            file.write(str(row) + "\n")
+
+# Function to publish file content to Confluence
+def publish_to_confluence(filename):
+    headers = {
+        "Content-Type": "application/json",
+    }
+    auth = (confluence_username, confluence_password)
+
+    with open(filename, "r") as file:
+        content = file.read()
+
+    data = {
+        "version": {
+            "number": "2"  # Increment this number each time you update the content
+        },
+        "title": "Replication Stats",  # Set your Confluence page title
+        "type": "page",
+        "body": {
+            "storage": {
+                "value": content,
+                "representation": "storage",
+            }
+        }
+    }
+
+    response = requests.put(confluence_url, headers=headers, auth=auth, json=data)
+    if response.status_code == 200:
+        print("Published to Confluence successfully.")
+    else:
+        print("Error publishing to Confluence:", response.text)
+
+# Schedule the task to run every 4 minutes
+schedule.every(4).minutes.do(lambda: publish_to_confluence(write_to_file(get_replication_stats())))
+
+# Run the scheduled tasks
+while True:
+    schedule.run_pending()
+    time.sleep(1)
