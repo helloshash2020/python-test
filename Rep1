@@ -1,47 +1,60 @@
-import subprocess
+import os
+import schedule
+import time
 import datetime
-import pdfkit
+import socket
+import psycopg2
 import requests
+import logging
+from tabulate import tabulate
 
-# Replace these with your Confluence credentials and settings
-confluence_username = "your_confluence_username"
-confluence_password = "your_confluence_password"
-confluence_site = "https://your-confluence-site"
-confluence_page_id = "your_confluence_page_id"
+# Configure logging
+logging.basicConfig(
+    filename="replication_stats.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
 
-# Define the Linux commands to run
-linux_commands = [
-    "ls -l",
-    "df -h",
-    "uptime",
-]
+# Set your PostgreSQL connection parameters
+db_params = {
+    "host": "your_postgres_host",
+    "database": "your_database",
+    "user": "your_user",
+    "password": "your_password",
+}
 
-# Create a timestamp for the PDF file
-current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-pdf_filename = f"command_output_{current_datetime}.pdf"
+# Set the Confluence API endpoint and credentials
+confluence_url = "https://your-confluence-site/wiki/rest/api/content/YOUR_PAGE_ID"
+confluence_username = "your_username"
+confluence_password = "your_password"
 
-# Execute Linux commands and capture output
-output_text = ""
-for command in linux_commands:
-    output_text += f"Command: {command}\n"
-    output_text += subprocess.getoutput(command) + "\n\n"
+# Directory to store data files
+data_directory = "data"
 
-# Save the output to a text file
-with open("output.txt", "w") as text_file:
-    text_file.write(output_text)
+# Function to fetch replication statistics and slots and format them as a table
+def get_replication_stats():
+    connection = None  # Initialize the connection variable
+    try:
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
 
-# Generate a PDF from the text file
-pdfkit.from_file("output.txt", pdf_filename)
+        # Get replication statistics with headers
+        cursor.execute("SELECT * FROM pg_stat_replication;")
+        replication_stats = cursor.fetchall()
+        replication_stats.insert(0, [desc[0] for desc in cursor.description])
 
-# Upload the PDF to Confluence
-headers = {"X-Atlassian-Token": "no-check"}
-files = {"file": (pdf_filename, open(pdf_filename, "rb"))}
-auth = (confluence_username, confluence_password)
+        # Get replication slots with headers
+        cursor.execute("SELECT * FROM pg_replication_slots;")
+        replication_slots = cursor.fetchall()
+        replication_slots.insert(0, [desc[0] for desc in cursor.description])
 
-upload_url = f"{confluence_site}/rest/api/content/{confluence_page_id}/child/attachment"
-response = requests.post(upload_url, headers=headers, files=files, auth=auth)
+        return replication_stats, replication_slots
+    except Exception as e:
+        logging.error("Error fetching replication stats: %s", str(e))
+    finally:
+        if connection:
+            connection.close()
 
-if response.status_code == 200:
-    print("File uploaded successfully to Confluence!")
-else:
-    print("Failed to upload file to Confluence.")
+# Rest of the script remains the same
+# ...
