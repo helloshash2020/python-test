@@ -38,13 +38,15 @@ def get_replication_stats():
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
 
-        # Get replication statistics
+        # Get replication statistics with headers
         cursor.execute("SELECT * FROM pg_stat_replication;")
         replication_stats = cursor.fetchall()
+        replication_stats.insert(0, [desc[0] for desc in cursor.description])
 
-        # Get replication slots
+        # Get replication slots with headers
         cursor.execute("SELECT * FROM pg_replication_slots;")
         replication_slots = cursor.fetchall()
+        replication_slots.insert(0, [desc[0] for desc in cursor.description])
 
         return replication_stats, replication_slots
     except Exception as e:
@@ -55,23 +57,17 @@ def get_replication_stats():
 
 # Function to write data to a text file with timestamp and hostname
 def write_to_file(data):
-    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    hostname = socket.gethostname()
-    filename = os.path.join(data_directory, f"replication_stats_{current_datetime}_{hostname}.txt")
+    current_week = datetime.datetime.now().strftime("%U")
+    filename = os.path.join(data_directory, f"replication_stats_week_{current_week}.txt")
     
-    with open(filename, "w") as file:
-        file.write(f"Datetime: {current_datetime}\n")
-        file.write(f"Hostname: {hostname}\n\n")
+    with open(filename, "a") as file:
+        file.write("\n\n")
+        file.write(f"Datetime: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        file.write(f"Hostname: {socket.gethostname()}\n\n")
         file.write("Replication Statistics:\n")
-        if data[0]:
-            file.write(tabulate(data[0], headers="keys", tablefmt="grid") + "\n\n")
-        else:
-            file.write("No Replication Statistics\n\n")
+        file.write(tabulate(data[0], headers="firstrow", tablefmt="grid") + "\n\n")
         file.write("Replication Slots:\n")
-        if data[1]:
-            file.write(tabulate(data[1], headers="keys", tablefmt="grid") + "\n")
-        else:
-            file.write("No Replication Slots\n")
+        file.write(tabulate(data[1], headers="firstrow", tablefmt="grid") + "\n")
     
     return filename
 
