@@ -1,0 +1,80 @@
+import os
+import glob
+import re
+import shutil
+
+# Define the directories
+mt940_directory = '/path/to/mt940_directory'
+customer_directory = '/path/to/customer_directory'
+log_directory = '/path/to/log_directory'
+new_directory = '/path/to/new_directory'
+
+# Step 1: Print date and time
+import datetime
+current_datetime = datetime.datetime.now()
+print("Current Date and Time:", current_datetime)
+
+# Step 2: List all files in the MT940 directory and get the latest MT940 file
+mt940_files = glob.glob(os.path.join(mt940_directory, '*.mt940'))
+if mt940_files:
+    latest_mt940_file = max(mt940_files, key=os.path.getctime)
+    print("Latest MT940 file:", latest_mt940_file)
+else:
+    print("No MT940 files found in the directory.")
+    exit()
+
+# Step 3: Check if a customer file is present
+currency_pattern = re.compile(r':60F:[A-Z]{3}([A-Z]{3})')  # Regex to extract currency from :60F: field
+account_pattern = re.compile(r':25:([0-9]+)')  # Regex to extract account number from :25: field
+
+currency_match = None
+account_match = None
+
+with open(latest_mt940_file, 'r') as mt940_file:
+    mt940_contents = mt940_file.read()
+    currency_match = currency_pattern.search(mt940_contents)
+    account_match = account_pattern.search(mt940_contents)
+
+if not currency_match or not account_match:
+    print("Currency or account number not found in the MT940 file.")
+    exit()
+
+currency = currency_match.group(1)
+account_number = account_match.group(1)
+
+print("Currency:", currency)
+print("Account Number:", account_number)
+
+# Step 4: Get the customer file based on currency
+customer_file = os.path.join(customer_directory, f'{currency}_customer.txt')
+
+if not os.path.isfile(customer_file):
+    print(f"Customer file for currency {currency} not found.")
+    exit()
+
+# Step 5: Read the customer file and get the customer ID
+customer_id = None
+with open(customer_file, 'r') as customer_file:
+    for line in customer_file:
+        line = line.strip()
+        if line.startswith(account_number):
+            customer_id = line.split(',')[1]
+            break
+
+if not customer_id:
+    print("Customer ID not found in the customer file.")
+    exit()
+
+print("Customer ID:", customer_id)
+
+# Step 6: Rename the MT940 file with customer ID
+new_mt940_file = os.path.join(new_directory, f'MT940_{customer_id}.mt940')
+shutil.move(latest_mt940_file, new_mt940_file)
+
+# Step 7: Log the operation
+log_file = os.path.join(log_directory, 'processing.log')
+log_entry = f"{current_datetime}: Renamed MT940 file {latest_mt940_file} to {new_mt940_file} for customer {customer_id}."
+with open(log_file, 'a') as log:
+    log.write(log_entry + '\n')
+
+print("Operation complete. MT940 file renamed and logged.")
