@@ -25,7 +25,7 @@ db_params = {
 }
 
 # Set the Confluence API endpoint and credentials
-confluence_url = "https://your-confluence-site/wiki/rest/api/content/YOUR_PAGE_ID"
+confluence_api_url = "https://your-confluence-site/rest/api/content/YOUR_PAGE_ID"  # Update with your Confluence page URL
 confluence_username = "your_username"
 confluence_password = "your_password"
 
@@ -34,7 +34,6 @@ data_directory = "data"
 
 # Function to fetch replication statistics and slots and format them as a table
 def get_replication_stats():
-    connection = None  # Initialize the connection variable
     try:
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
@@ -56,5 +55,56 @@ def get_replication_stats():
         if connection:
             connection.close()
 
-# Rest of the script remains the same
-# ...
+# Function to write data to a text file with timestamp and hostname
+def write_to_file(data):
+    current_week = datetime.datetime.now().strftime("%U")
+    filename = os.path.join(data_directory, f"replication_stats_week_{current_week}.txt")
+    
+    with open(filename, "a") as file:
+        file.write("\n\n")
+        file.write(f"Datetime: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        file.write(f"Hostname: {socket.gethostname()}\n\n")
+        file.write("Replication Statistics:\n")
+        file.write(tabulate(data[0], headers="firstrow", tablefmt="grid") + "\n\n")
+        file.write("Replication Slots:\n")
+        file.write(tabulate(data[1], headers="firstrow", tablefmt="grid") + "\n")
+    
+    return filename
+
+# Function to publish file content as a Confluence attachment
+def publish_to_confluence(filename):
+    auth = (confluence_username, confluence_password)
+
+    # Get the current Confluence page ID from the URL
+    confluence_page_id = confluence_api_url.split("/")[-1]
+
+    # Define the URL for uploading an attachment to the Confluence page
+    upload_url = f"https://your-confluence-site/rest/api/content/{confluence_page_id}/child/attachment"
+
+    # Set the headers for the attachment
+    headers = {
+        "X-Atlassian-Token": "nocheck",  # Disable CSRF token
+    }
+
+    with open(filename, "rb") as file:
+        # Create a new attachment on the Confluence page
+        response = requests.post(upload_url, auth=auth, headers=headers, files={"file": file})
+        if response.status_code == 200:
+            logging.info("Uploaded attachment to Confluence successfully.")
+            os.remove(filename)  # Remove the file after uploading
+        else:
+            logging.error("Error uploading attachment to Confluence: %s", response.text)
+
+# Schedule the task to run every 2 minutes
+schedule.every(2).minutes.do(lambda: write_to_file(get_replication_stats()))
+
+# Schedule the publishing task to run every hour
+schedule.every().hour.do(lambda: publish_to_confluence(write_to_file(get_replication_stats())))
+
+# Create the data directory if it doesn't exist
+os.makedirs(data_directory, exist_ok=True)
+
+# Run the scheduled tasks
+while True:
+    schedule.run_pending()
+    time.sleep(1)
