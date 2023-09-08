@@ -6,6 +6,7 @@ import socket
 import psycopg2
 import requests
 import logging
+import csv
 from tabulate import tabulate
 
 # Configure logging
@@ -32,48 +33,55 @@ confluence_password = "your_password"
 # Directory to store data files
 data_directory = "data"
 
-# Function to fetch replication statistics and slots and format them as a table
+# Function to fetch replication statistics with a timestamp column
 def get_replication_stats():
     try:
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
 
         # Get replication statistics with headers
-        cursor.execute("SELECT * FROM pg_stat_replication;")
+        cursor.execute("SELECT NOW() AS timestamp, * FROM pg_stat_replication;")
         replication_stats = cursor.fetchall()
-        replication_stats.insert(0, [desc[0] for desc in cursor.description])
 
-        # Get replication slots with headers
-        cursor.execute("SELECT * FROM pg_replication_slots;")
-        replication_slots = cursor.fetchall()
-        replication_slots.insert(0, [desc[0] for desc in cursor.description])
-
-        return replication_stats, replication_slots
+        return replication_stats
     except Exception as e:
         logging.error("Error fetching replication stats: %s", str(e))
     finally:
         if connection:
             connection.close()
 
-# Function to write data to a text file with timestamp and hostname
-def write_to_file(data):
+# Function to fetch replication slots with a timestamp column
+def get_replication_slots():
+    try:
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+
+        # Get replication slots with headers
+        cursor.execute("SELECT NOW() AS timestamp, * FROM pg_replication_slots;")
+        replication_slots = cursor.fetchall()
+
+        return replication_slots
+    except Exception as e:
+        logging.error("Error fetching replication slots: %s", str(e))
+    finally:
+        if connection:
+            connection.close()
+
+# Function to write data to a CSV file with timestamp and hostname
+def write_to_csv(data, query_type):
     current_week = datetime.datetime.now().strftime("%U")
-    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = os.path.join(data_directory, f"replication_stats_week_{current_week}_{current_datetime}.txt")
-    
-    with open(filename, "a") as file:
-        file.write("\n\n")
-        file.write(f"Datetime: {current_datetime}\n")
-        file.write(f"Hostname: {socket.gethostname()}\n\n")
-        file.write("Replication Statistics:\n")
-        file.write(tabulate(data[0], headers="firstrow", tablefmt="grid") + "\n\n")
-        file.write("Replication Slots:\n")
-        file.write(tabulate(data[1], headers="firstrow", tablefmt="grid") + "\n")
-    
-    return filename
+    filename = os.path.join(data_directory, f"{query_type}_week_{current_week}.csv")
+
+    with open(filename, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        if os.path.getsize(filename) == 0:
+            # Write headers only if the file is empty
+            writer.writerow(["Timestamp", "Hostname"] + data[0].keys())
+        for row in data:
+            writer.writerow([row['timestamp'], socket.gethostname()] + list(row.values())[1:])
 
 # Function to publish file content as a Confluence attachment
-def publish_to_confluence(filename):
+def publish_to_confluence(filename, query_type):
     auth = (confluence_username, confluence_password)
 
     # Get the current Confluence page ID from the URL
@@ -91,16 +99,22 @@ def publish_to_confluence(filename):
         # Create a new attachment on the Confluence page
         response = requests.post(upload_url, auth=auth, headers=headers, files={"file": file})
         if response.status_code == 200:
-            logging.info("Uploaded attachment to Confluence successfully.")
+            logging.info(f"Uploaded {query_type} attachment to Confluence successfully.")
             os.remove(filename)  # Remove the file after uploading
         else:
-            logging.error("Error uploading attachment to Confluence: %s", response.text)
+            logging.error(f"Error uploading {query_type} attachment to Confluence: {response.text}")
 
-# Schedule the task to run every 2 minutes
-schedule.every(2).minutes.do(lambda: write_to_file(get_replication_stats()))
+# Schedule the task to run every 2 minutes for replication statistics
+schedule.every(2).minutes.do(lambda: write_to_csv(get_replication_stats(), "replication_stats"))
 
-# Schedule the publishing task to run every hour
-schedule.every().hour.do(lambda: publish_to_confluence(write_to_file(get_replication_stats())))
+# Schedule the task to run every 2 minutes for replication slots
+schedule.every(2).minutes.do(lambda: write_to_csv(get_replication_slots(), "replication_slots"))
+
+# Schedule the publishing task to run every hour for replication statistics
+schedule.every().hour.do(lambda: publish_to_confluence(write_to_csv(get_replication_stats(), "replication_stats"), "replication_stats"))
+
+# Schedule the publishing task to run every hour for replication slots
+schedule.every().hour.do(lambda: publish_to_confluence(write_to_csv(get_replication_slots(), "replication_slots"), "replication_slots"))
 
 # Create the data directory if it doesn't exist
 os.makedirs(data_directory, exist_ok=True)
