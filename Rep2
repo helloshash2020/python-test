@@ -83,13 +83,25 @@ def post_to_confluence(filename):
         else:
             logging.error(f"Error uploading attachment to Confluence: {response.text}")
 
+# Function to upload files to Confluence at 12 AM daily
+def upload_to_confluence_daily():
+    # Get the current date
+    current_date = datetime.datetime.now().strftime('%Y-%m-%d')
+
+    # Construct the filenames
+    pg_replication_slots_filename = os.path.join(data_directory, f"pg_replication_slots_{current_date}.csv")
+    pg_stat_replication_filename = os.path.join(data_directory, f"pg_stat_replication_{current_date}.csv")
+
+    # Upload both files to Confluence
+    post_to_confluence(pg_replication_slots_filename)
+    post_to_confluence(pg_stat_replication_filename)
+
 # Schedule the task to run every 2 minutes
 schedule.every(2).minutes.do(lambda: fetch_and_write_to_csv("SELECT NOW() AS timestamp, * FROM pg_replication_slots", os.path.join(data_directory, f"pg_replication_slots_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv")))
 schedule.every(2).minutes.do(lambda: fetch_and_write_to_csv("SELECT NOW() AS timestamp, * FROM pg_stat_replication", os.path.join(data_directory, f"pg_stat_replication_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv")))
 
-# Schedule the publishing task to run every 24 hours
-schedule.every(24).hours.do(lambda: post_to_confluence(os.path.join(data_directory, f"pg_replication_slots_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv")))
-schedule.every(24).hours.do(lambda: post_to_confluence(os.path.join(data_directory, f"pg_stat_replication_{datetime.datetime.now().strftime('%Y-%m-%d')}.csv")))
+# Schedule the upload task to run at 12 AM daily
+schedule.every().day.at("00:00").do(upload_to_confluence_daily)
 
 # Create the data directory if it doesn't exist
 os.makedirs(data_directory, exist_ok=True)
