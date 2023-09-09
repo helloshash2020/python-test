@@ -77,8 +77,17 @@ def write_to_csv(data, query_type):
         if os.path.getsize(filename) == 0:
             # Write headers only if the file is empty
             writer.writerow(["Timestamp", "Hostname"] + data[0].keys())
-        for row in data:
-            writer.writerow([row['timestamp'], socket.gethostname()] + list(row.values())[1:])
+        
+        # Check if data is not empty before processing
+        if data:
+            for row in data:
+                # Verify that each row is a dictionary
+                if isinstance(row, dict):
+                    writer.writerow([row.get('timestamp', ''), socket.gethostname()] + [row.get(key, '') for key in row.keys()])
+                else:
+                    logging.error(f"Invalid data format in {query_type} query result.")
+        else:
+            logging.warning(f"No data returned for {query_type} query.")
 
 # Function to publish file content as a Confluence attachment
 def publish_to_confluence(filename, query_type):
