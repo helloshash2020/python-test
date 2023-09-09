@@ -1,60 +1,91 @@
-import subprocess
-import datetime
+import os
 import schedule
 import time
-from fpdf import FPDF
+import datetime
+import socket
+import psycopg2
 import requests
+import csv
 
-# Linux commands to execute
-linux_commands = [
-    "command1",
-    "command2",
-    "command3"
-]
+# Set your PostgreSQL connection parameters
+db_params = {
+    "host": "your_postgres_host",
+    "database": "your_database",
+    "user": "your_user",
+    "password": "your_password",
+}
 
-# Confluence credentials
-confluence_username = "your_confluence_username"
-confluence_password = "your_confluence_password"
-confluence_page_id = "your_confluence_page_id"
+# Set the Confluence API endpoint and credentials
+confluence_api_url = "https://your-confluence-site/rest/api/content/YOUR_PAGE_ID"  # Update with your Confluence page URL
+confluence_username = "your_username"
+confluence_password = "your_password"
 
-def run_commands_and_upload_to_confluence():
-    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    pdf_file_name = f"output_{current_datetime}.pdf"
+# Directory to store data files
+data_directory = "data"
 
-    # Execute Linux commands and capture output
-    command_output = []
-    for cmd in linux_commands:
-        output = subprocess.getoutput(cmd)
-        command_output.append(f"Command: {cmd}\n\n{output}\n\n")
+# Function to fetch data from PostgreSQL and write it to a CSV file
+def fetch_and_write_to_csv(query, filename):
+    try:
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
 
-    # Create a PDF document and write command outputs to it
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, "\n".join(command_output))
+        # Execute the query
+        cursor.execute(query)
+        result = cursor.fetchall()
 
-    # Output the PDF to a file
-    pdf.output(pdf_file_name)
+        # Write data to the CSV file
+        with open(filename, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            if os.path.getsize(filename) == 0:
+                # Write headers only if the file is empty
+                writer.writerow(["Timestamp", "Hostname"] + [desc[0] for desc in cursor.description])
+            timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            hostname = socket.gethostname()
+            for row in result:
+                # Convert the row data (tuple) to a list and concatenate
+                writer.writerow([timestamp, hostname] + list(row))
+    except Exception as e:
+        print(f"Error fetching data and writing to CSV: {str(e)}")
+    finally:
+        if connection:
+            connection.close()
 
-    # Upload the PDF file to Confluence
-    confluence_url = f"https://your-confluence-site/rest/api/content/{confluence_page_id}/child/ATTACHMENT_NAME"
-    headers = {"X-Atlassian-Token": "no-check"}
-    files = {"file": (pdf_file_name, open(pdf_file_name, "rb"))}
+# Function to post a file as an attachment to Confluence
+def post_to_confluence(filename):
     auth = (confluence_username, confluence_password)
 
-    response = requests.post(confluence_url, headers=headers, files=files, auth=auth)
-    if response.status_code == 200:
-        print("File uploaded successfully to Confluence!")
-    else:
-        print("Failed to upload file to Confluence.")
+    # Get the current Confluence page ID from the URL
+    confluence_page_id = confluence_api_url.split("/")[-1]
 
-    # Remove the temporary PDF file
-    subprocess.run(["rm", pdf_file_name])
+    # Define the URL for uploading an attachment to the Confluence page
+    upload_url = f"https://your-confluence-site/rest/api/content/{confluence_page_id}/child/attachment"
 
-# Schedule the task to run at a specific time, e.g., every day at 9 AM
-schedule.every().day.at("09:00").do(run_commands_and_upload_to_confluence)
+    # Set the headers for the attachment
+    headers = {
+        "X-Atlassian-Token": "nocheck",  # Disable CSRF token
+    }
 
-# Infinite loop to keep the script running
+    with open(filename, "rb") as file:
+        # Create a new attachment on the Confluence page
+        response = requests.post(upload_url, auth=auth, headers=headers, files={"file": file})
+        if response.status_code == 200:
+            print(f"Uploaded attachment to Confluence successfully.")
+            os.remove(filename)  # Remove the file after uploading
+        else:
+            print(f"Error uploading attachment to Confluence: {response.text}")
+
+# Schedule the task to run every 2 minutes
+schedule.every(2).minutes.do(lambda: fetch_and_write_to_csv("SELECT NOW() AS timestamp, * FROM pg_replication_slots", os.path.join(data_directory, "pg_replication_slots.csv")))
+schedule.every(2).minutes.do(lambda: fetch_and_write_to_csv("SELECT NOW() AS timestamp, * FROM pg_stat_replication", os.path.join(data_directory, "pg_stat_replication.csv")))
+
+# Schedule the publishing task to run every 24 hours
+schedule.every(24).hours.do(lambda: post_to_confluence(os.path.join(data_directory, "pg_replication_slots.csv")))
+schedule.every(24).hours.do(lambda: post_to_confluence(os.path.join(data_directory, "pg_stat_replication.csv")))
+
+# Create the data directory if it doesn't exist
+os.makedirs(data_directory, exist_ok=True)
+
+# Run the scheduled tasks
 while True:
     schedule.run_pending()
     time.sleep(1)
