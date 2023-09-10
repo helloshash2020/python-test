@@ -33,6 +33,7 @@ confluence_password = "your_password"
 data_directory = "data"
 
 # Function to fetch data from PostgreSQL and write it to a CSV file
+# Function to fetch data from PostgreSQL and write it to a CSV file
 def fetch_and_write_to_csv(query, filename):
     try:
         connection = psycopg2.connect(**db_params)
@@ -47,17 +48,20 @@ def fetch_and_write_to_csv(query, filename):
             writer = csv.writer(file)
             if os.path.getsize(filename) == 0:
                 # Write headers only if the file is empty
-                writer.writerow(["Timestamp", "Hostname"] + [desc[0] for desc in cursor.description])
+                header = ["Timestamp", "Hostname"] + [desc[0] for desc in cursor.description]
+                writer.writerow(header)
             timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             hostname = socket.gethostname()
             for row in result:
                 # Convert the row data (tuple) to a list and concatenate
-                writer.writerow([timestamp, hostname] + list(map(str, row)))  # Convert all elements to strings
+                data = [timestamp, hostname] + list(map(str, row))  # Convert all elements to strings
+                writer.writerow(data)
     except Exception as e:
         logging.error(f"Error fetching data and writing to CSV: {str(e)}")
     finally:
         if connection:
             connection.close()
+
 
 # Function to post a file as an attachment to Confluence
 def post_to_confluence(filename):
