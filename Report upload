@@ -1,0 +1,82 @@
+import os
+import subprocess
+import csv
+import difflib
+from datetime import datetime
+import socket
+
+# Function to run a shell script and capture its output in a CSV file
+def run_script_and_capture_output(script_path, output_csv):
+    try:
+        # Run the shell script
+        subprocess.run([script_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, check=True, text=True)
+
+        # Capture the script's output (assuming it's a numeric count)
+        script_output = subprocess.check_output([script_path], shell=True, text=True).strip()
+
+        # Get the current date and hostname
+        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        hostname = socket.gethostname()
+
+        # Write the result to the output CSV
+        with open(output_csv, mode='w', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(["Datetime", "Hostname", "Count"])
+            writer.writerow([current_datetime, hostname, script_output])
+        
+        print(f"Result from {script_path} saved to {output_csv}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error running {script_path}: {e}")
+
+# Get the latest directory in /home/dp-postgres
+base_directory = "/home/dp-postgres"
+latest_directory = max([os.path.join(base_directory, d) for d in os.listdir(base_directory)], key=os.path.getmtime)
+
+# Paths to your 12 shell scripts and output CSV files
+script_paths = [
+    os.path.join(latest_directory, "script1.sh"),
+    os.path.join(latest_directory, "script2.sh"),
+    os.path.join(latest_directory, "script3.sh"),
+    os.path.join(latest_directory, "script4.sh"),
+    os.path.join(latest_directory, "script5.sh"),
+    os.path.join(latest_directory, "script6.sh"),
+    os.path.join(latest_directory, "script7.sh"),
+    os.path.join(latest_directory, "script8.sh"),
+    os.path.join(latest_directory, "script9.sh"),
+    os.path.join(latest_directory, "script10.sh"),
+    os.path.join(latest_directory, "script11.sh"),
+    os.path.join(latest_directory, "script12.sh"),
+]
+
+output_csv1 = "output1.csv"
+output_csv2 = "output2.csv"
+
+# Run the first 6 scripts and capture the output in CSV1
+for i in range(6):
+    run_script_and_capture_output(script_paths[i], output_csv1)
+
+# Run the next 6 scripts and capture the output in CSV2
+for i in range(6, 12):
+    run_script_and_capture_output(script_paths[i], output_csv2)
+
+# Compare the two CSV files and highlight differences
+with open(output_csv1, 'r') as file1, open(output_csv2, 'r') as file2:
+    lines1 = file1.readlines()
+    lines2 = file2.readlines()
+
+differ = difflib.Differ()
+diff = list(differ.compare(lines1, lines2))
+
+# Print the differences and append them to CSV2
+with open(output_csv2, 'a', newline='') as csv2_file:
+    csv2_writer = csv.writer(csv2_file)
+    for line in diff:
+        if line.startswith('  '):
+            continue
+        elif line.startswith('- '):
+            print(f"Removed: {line[2:]}")
+        elif line.startswith('+ '):
+            print(f"Added: {line[2:]}")
+            csv2_writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), socket.gethostname(), line[2:]])
+
+print("Differences between CSV files printed and appended to CSV2.")
