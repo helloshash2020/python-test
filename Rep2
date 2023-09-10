@@ -34,6 +34,7 @@ data_directory = "data"
 
 # Function to fetch data from PostgreSQL and write it to a CSV file
 # Function to fetch data from PostgreSQL and write it to a CSV file
+# Function to fetch data from PostgreSQL and write it to a CSV file
 def fetch_and_write_to_csv(query, filename):
     try:
         connection = psycopg2.connect(**db_params)
@@ -52,15 +53,21 @@ def fetch_and_write_to_csv(query, filename):
                 writer.writerow(header)
             timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             hostname = socket.gethostname()
-            for row in result:
-                # Convert the row data (tuple) to a list and concatenate
-                data = [timestamp, hostname] + list(map(str, row))  # Convert all elements to strings
-                writer.writerow(data)
+            
+            # Check if there are no active replication connections
+            if not result:
+                writer.writerow([timestamp, hostname, "No active replication connections"])
+            else:
+                for row in result:
+                    # Convert the row data (tuple) to a list and concatenate
+                    data = [timestamp, hostname] + list(map(str, row))  # Convert all elements to strings
+                    writer.writerow(data)
     except Exception as e:
         logging.error(f"Error fetching data and writing to CSV: {str(e)}")
     finally:
         if connection:
             connection.close()
+
 
 
 # Function to post a file as an attachment to Confluence
