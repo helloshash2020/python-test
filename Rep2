@@ -35,6 +35,7 @@ data_directory = "data"
 # Function to fetch data from PostgreSQL and write it to a CSV file
 # Function to fetch data from PostgreSQL and write it to a CSV file
 # Function to fetch data from PostgreSQL and write it to a CSV file
+# Modify the fetch_and_write_to_csv function
 def fetch_and_write_to_csv(query, filename):
     try:
         connection = psycopg2.connect(**db_params)
@@ -53,9 +54,8 @@ def fetch_and_write_to_csv(query, filename):
                 writer.writerow(header)
             timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             hostname = socket.gethostname()
-            
-            # Check if there are no active replication connections
             if not result:
+                # Write a message indicating no active replication connections
                 writer.writerow([timestamp, hostname, "No active replication connections"])
             else:
                 for row in result:
