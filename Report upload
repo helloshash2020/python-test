@@ -35,14 +35,23 @@ def run_script_with_args_and_capture_output(script_path, args, output_csv):
     except Exception as e:
         print(f"Error: {e}")
 
-# Find the latest directory based on the most recent modification time
+# Find the latest modified directory starting with "V0"
 base_directory = "/home/dp-postgres"
-latest_directory = max([os.path.join(base_directory, d) for d in os.listdir(base_directory)], key=os.path.getmtime)
+latest_directory = None
+latest_modified_time = 0
+
+for d in os.listdir(base_directory):
+    if d.startswith("V0") and os.path.isdir(os.path.join(base_directory, d)):
+        directory_path = os.path.join(base_directory, d)
+        modified_time = os.path.getmtime(directory_path)
+        if modified_time > latest_modified_time:
+            latest_directory = directory_path
+            latest_modified_time = modified_time
 
 if latest_directory is None:
-    print("No directories found in the base directory.")
+    print("No directory starting with 'V0' found.")
 else:
-    print(f"Latest directory: {latest_directory}")
+    print(f"Latest modified directory: {latest_directory}")
 
     # Path to the replication.sh script within the latest directory
     replication_script_path = os.path.join(latest_directory, "replication.sh")
@@ -115,7 +124,4 @@ else:
             elif line.startswith('- '):
                 print(f"Removed: {line[2:]}")
             elif line.startswith('+ '):
-                print(f"Added: {line[2:]}")
-                csv2_writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), socket.gethostname(), line[2:]])
-
-    print("Differences between CSV files printed and appended to CSV2.")
+                print(f"Added: {line[2:]}
