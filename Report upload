@@ -35,82 +35,91 @@ def run_script_with_args_and_capture_output(script_path, args, output_csv):
     except Exception as e:
         print(f"Error: {e}")
 
-# Find the latest directory starting with "V0" in /home/dp-postgres
+# Find the latest directory starting with "V0"
 base_directory = "/home/dp-postgres"
-latest_directory = max([os.path.join(base_directory, d) for d in os.listdir(base_directory) if d.startswith("V0")], key=os.path.getmtime)
+latest_directory = None
 
-# Define arguments for the replication.sh script for each of the 12 runs
-replication_script_args = [
-    # Arguments for the first run
-    ["arg1", "arg2"],
-    # Arguments for the second run
-    ["arg3", "arg4"],
-    # Arguments for the third run
-    ["arg5", "arg6"],
-    # Arguments for the fourth run
-    ["arg7", "arg8"],
-    # Arguments for the fifth run
-    ["arg9", "arg10"],
-    # Arguments for the sixth run
-    ["arg11", "arg12"],
-    # Arguments for the seventh run
-    ["arg13", "arg14"],
-    # Arguments for the eighth run
-    ["arg15", "arg16"],
-    # Arguments for the ninth run
-    ["arg17", "arg18"],
-    # Arguments for the tenth run
-    ["arg19", "arg20"],
-    # Arguments for the eleventh run
-    ["arg21", "arg22"],
-    # Arguments for the twelfth run
-    ["arg23", "arg24"],
-]
+for d in os.listdir(base_directory):
+    if d.startswith("V0") and os.path.isdir(os.path.join(base_directory, d)):
+        latest_directory = os.path.join(base_directory, d)
 
-# Path to the replication.sh script
-replication_script_path = os.path.join(latest_directory, "replication.sh")
+if latest_directory is None:
+    print("No directory starting with 'V0' found.")
+else:
+    print(f"Latest directory: {latest_directory}")
 
-# Paths to your 12 shell scripts and output CSV files
-script_paths = [
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-]
+    # Path to the replication.sh script within the latest directory
+    replication_script_path = os.path.join(latest_directory, "replication.sh")
 
-output_csv1 = "output1.csv"
-output_csv2 = "output2.csv"
+    # Define arguments for the replication.sh script for each of the 12 runs
+    replication_script_args = [
+        # Arguments for the first run
+        ["arg1", "arg2"],
+        # Arguments for the second run
+        ["arg3", "arg4"],
+        # Arguments for the third run
+        ["arg5", "arg6"],
+        # Arguments for the fourth run
+        ["arg7", "arg8"],
+        # Arguments for the fifth run
+        ["arg9", "arg10"],
+        # Arguments for the sixth run
+        ["arg11", "arg12"],
+        # Arguments for the seventh run
+        ["arg13", "arg14"],
+        # Arguments for the eighth run
+        ["arg15", "arg16"],
+        # Arguments for the ninth run
+        ["arg17", "arg18"],
+        # Arguments for the tenth run
+        ["arg19", "arg20"],
+        # Arguments for the eleventh run
+        ["arg21", "arg22"],
+        # Arguments for the twelfth run
+        ["arg23", "arg24"],
+    ]
 
-# Run each script with its respective arguments and capture the output in CSV1 and CSV2
-for i in range(12):
-    run_script_with_args_and_capture_output(script_paths[i], replication_script_args[i], output_csv1 if i < 6 else output_csv2)
+    # Paths to your 12 shell scripts and output CSV files
+    script_paths = [
+        replication_script_path,
+        replication_script_path,
+        replication_script_path,
+        replication_script_path,
+        replication_script_path,
+        replication_script_path,
+        replication_script_path,
+        replication_script_path,
+        replication_script_path,
+        replication_script_path,
+        replication_script_path,
+        replication_script_path,
+    ]
 
-# Compare the two CSV files and highlight differences
-with open(output_csv1, 'r') as file1, open(output_csv2, 'r') as file2:
-    lines1 = file1.readlines()
-    lines2 = file2.readlines()
+    output_csv1 = "output1.csv"
+    output_csv2 = "output2.csv"
 
-differ = difflib.Differ()
-diff = list(differ.compare(lines1, lines2))
+    # Run each script with its respective arguments and capture the output in CSV1 and CSV2
+    for i in range(12):
+        run_script_with_args_and_capture_output(script_paths[i], replication_script_args[i], output_csv1 if i < 6 else output_csv2)
 
-# Print the differences and append them to CSV2
-with open(output_csv2, 'a', newline='') as csv2_file:
-    csv2_writer = csv.writer(csv2_file)
-    for line in diff:
-        if line.startswith('  '):
-            continue
-        elif line.startswith('- '):
-            print(f"Removed: {line[2:]}")
-        elif line.startswith('+ '):
-            print(f"Added: {line[2:]}")
-            csv2_writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), socket.gethostname(), line[2:]])
+    # Compare the two CSV files and highlight differences
+    with open(output_csv1, 'r') as file1, open(output_csv2, 'r') as file2:
+        lines1 = file1.readlines()
+        lines2 = file2.readlines()
 
-print("Differences between CSV files printed and appended to CSV2.")
+    differ = difflib.Differ()
+    diff = list(differ.compare(lines1, lines2))
+
+    # Print the differences and append them to CSV2
+    with open(output_csv2, 'a', newline='') as csv2_file:
+        csv2_writer = csv.writer(csv2_file)
+        for line in diff:
+            if line.startswith('  '):
+                continue
+            elif line.startswith('- '):
+                print(f"Removed: {line[2:]}")
+            elif line.startswith('+ '):
+                print(f"Added: {line[2:]}")
+                csv2_writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), socket.gethostname(), line[2:]])
+
+    print("Differences between CSV files printed and appended to CSV2.")
