@@ -1,0 +1,110 @@
+import os
+import subprocess
+import csv
+import difflib
+from datetime import datetime
+import socket
+
+# Function to run a shell script with arguments and capture its output in a CSV file
+def run_script_with_args_and_capture_output(script_path, args, output_csv):
+    try:
+        # Run the shell script with arguments
+        command = [script_path] + args
+        subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, check=True, text=True)
+
+        # Capture the script's output (assuming it's a numeric count)
+        script_output = subprocess.check_output(command, shell=True, text=True).strip()
+
+        # Get the current date and hostname
+        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        hostname = socket.gethostname()
+
+        # Write the result to the output CSV
+        with open(output_csv, mode='w', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(["Datetime", "Hostname", "Count"])
+            writer.writerow([current_datetime, hostname, script_output])
+        
+        print(f"Result from {script_path} with arguments {args} saved to {output_csv}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error running {script_path} with arguments {args}: {e}")
+
+# Get the latest directory in /home/dp-postgres
+base_directory = "/home/dp-postgres"
+latest_directory = max([os.path.join(base_directory, d) for d in os.listdir(base_directory)], key=os.path.getmtime)
+
+# Define arguments for the replication.sh script for each of the 12 runs
+replication_script_args = [
+    # Arguments for the first run
+    ["arg1", "arg2"],
+    # Arguments for the second run
+    ["arg3", "arg4"],
+    # Arguments for the third run
+    ["arg5", "arg6"],
+    # Arguments for the fourth run
+    ["arg7", "arg8"],
+    # Arguments for the fifth run
+    ["arg9", "arg10"],
+    # Arguments for the sixth run
+    ["arg11", "arg12"],
+    # Arguments for the seventh run
+    ["arg13", "arg14"],
+    # Arguments for the eighth run
+    ["arg15", "arg16"],
+    # Arguments for the ninth run
+    ["arg17", "arg18"],
+    # Arguments for the tenth run
+    ["arg19", "arg20"],
+    # Arguments for the eleventh run
+    ["arg21", "arg22"],
+    # Arguments for the twelfth run
+    ["arg23", "arg24"],
+]
+
+# Path to the replication.sh script
+replication_script_path = os.path.join(latest_directory, "replication.sh")
+
+# Paths to your 12 shell scripts and output CSV files
+script_paths = [
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+]
+
+output_csv1 = "output1.csv"
+output_csv2 = "output2.csv"
+
+# Run each script with its respective arguments and capture the output in CSV1 and CSV2
+for i in range(12):
+    run_script_with_args_and_capture_output(script_paths[i], replication_script_args[i], output_csv1 if i < 6 else output_csv2)
+
+# Compare the two CSV files and highlight differences
+with open(output_csv1, 'r') as file1, open(output_csv2, 'r') as file2:
+    lines1 = file1.readlines()
+    lines2 = file2.readlines()
+
+differ = difflib.Differ()
+diff = list(differ.compare(lines1, lines2))
+
+# Print the differences and append them to CSV2
+with open(output_csv2, 'a', newline='') as csv2_file:
+    csv2_writer = csv.writer(csv2_file)
+    for line in diff:
+        if line.startswith('  '):
+            continue
+        elif line.startswith('- '):
+            print(f"Removed: {line[2:]}")
+        elif line.startswith('+ '):
+            print(f"Added: {line[2:]}")
+            csv2_writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), socket.gethostname(), line[2:]])
+
+print("Differences between CSV files printed and appended to CSV2.")
