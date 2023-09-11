@@ -115,13 +115,15 @@ else:
     differ = difflib.Differ()
     diff = list(differ.compare(lines1, lines2))
 
-    # Print the differences and append them to CSV2
-    with open(output_csv2, 'a', newline='') as csv2_file:
-        csv2_writer = csv.writer(csv2_file)
-        for line in diff:
-            if line.startswith('  '):
-                continue
-            elif line.startswith('- '):
-                print(f"Removed: {line[2:]}")
-            elif line.startswith('+ '):
-                print(f"Added: {line[2:]}
+# Print the differences and append them to CSV2
+with open(output_csv2, 'a', newline='') as csv2_file:
+    csv2_writer = csv.writer(csv2_file)
+    for line in diff:
+        if line.startswith('  '):
+            continue
+        elif line.startswith('- '):
+            print(f"Removed: {line[2:]}")
+        elif line.startswith('+ '):
+            print(f"Added: {line.strip('+ ')}")
+            csv2_writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), socket.gethostname(), line.strip('+ ')])
+
