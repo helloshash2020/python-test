@@ -35,16 +35,12 @@ def run_script_with_args_and_capture_output(script_path, args, output_csv):
     except Exception as e:
         print(f"Error: {e}")
 
-# Find the latest directory starting with "V0"
+# Find the latest directory based on the most recent modification time
 base_directory = "/home/dp-postgres"
-latest_directory = None
-
-for d in os.listdir(base_directory):
-    if d.startswith("V0") and os.path.isdir(os.path.join(base_directory, d)):
-        latest_directory = os.path.join(base_directory, d)
+latest_directory = max([os.path.join(base_directory, d) for d in os.listdir(base_directory)], key=os.path.getmtime)
 
 if latest_directory is None:
-    print("No directory starting with 'V0' found.")
+    print("No directories found in the base directory.")
 else:
     print(f"Latest directory: {latest_directory}")
 
