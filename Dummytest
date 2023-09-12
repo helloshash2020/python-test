@@ -1,0 +1,28 @@
+import csv
+
+# Function to sort a CSV file by the table_schema column
+def sort_csv_by_table_schema(input_csv, output_csv):
+    try:
+        with open(input_csv, 'r', newline='') as csv_file:
+            csv_reader = csv.reader(csv_file)
+            header = next(csv_reader)  # Read the header row
+            data = sorted(csv_reader, key=lambda row: row[0])  # Sort by the table_schema column (assuming it's the first column)
+
+        with open(output_csv, 'w', newline='') as sorted_csv_file:
+            csv_writer = csv.writer(sorted_csv_file)
+            csv_writer.writerow(header)  # Write the header row
+            csv_writer.writerows(data)  # Write the sorted data
+
+        print(f"CSV file {input_csv} sorted by table_schema and saved to {output_csv}")
+    except Exception as e:
+        print(f"Error sorting CSV file: {e}")
+
+# Define input and output CSV filenames
+input_csv1 = "LMS_hostname.csv"
+input_csv2 = "RPT_hostname.csv"
+output_csv1_sorted = "LMS_hostname_sorted.csv"
+output_csv2_sorted = "RPT_hostname_sorted.csv"
+
+# Sort the CSV files by table_schema
+sort_csv_by_table_schema(input_csv1, output_csv1_sorted)
+sort_csv_by_table_schema(input_csv2, output_csv2_sorted)
