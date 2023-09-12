@@ -1,0 +1,12 @@
+# Capture the script's output (assuming it's a numeric count)
+script_output = stdout.decode().strip()
+
+# Get the current date and hostname
+current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+hostname = socket.gethostname()
+
+# Write the result to the output CSV
+with open(output_csv, mode='w', newline='') as csv_file:
+    writer = csv.writer(csv_file)
+    writer.writerow(["Datetime", "Hostname", "Count"])
+    writer.writerow([current_datetime, hostname, script_output])
