@@ -1,102 +1,29 @@
-import psycopg2
-from datetime import datetime, timedelta
-import os
-import logging
-from atlassian import Confluence
-
-# Configure logging
-logging.basicConfig(filename='pg_replication.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
-
-# PostgreSQL connection parameters
-db_params = {
-    'dbname': 'your_database_name',
-    'user': 'your_username',
-    'password': 'your_password',
-    'host': 'your_database_host',
-    'port': 'your_database_port'
-}
-
-# Confluence credentials
-confluence_url = 'https://your-confluence-url.com'
-confluence_username = 'your_confluence_username'
-confluence_password = 'your_confluence_password'
-confluence_space_key = 'your_space_key'
-
-# Function to fetch pg_stat_replication and pg_replication_slots data
-def fetch_and_save_data():
+# Function to run a shell script with arguments and capture its output in a CSV file
+def run_script_with_args_and_capture_output(script_path, args, output_csv):
     try:
-        # Connect to PostgreSQL
-        conn = psycopg2.connect(**db_params)
-        cursor = conn.cursor()
+        # Run the shell script with arguments
+        command = f"{script_path} {' '.join(args)}"  # Construct the command as a string
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        stdout, stderr = process.communicate()
 
-        # Fetch data from pg_stat_replication
-        cursor.execute("SELECT * FROM pg_stat_replication;")
-        replication_data = cursor.fetchall()
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, command, stderr)
 
-        # Fetch data from pg_replication_slots
-        cursor.execute("SELECT * FROM pg_replication_slots;")
-        slots_data = cursor.fetchall()
+        # Capture the script's output (assuming it's a numeric count)
+        script_output = stdout.decode().strip()
 
-        # Close PostgreSQL connection
-        conn.close()
+        # Get the current date and hostname
+        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        hostname = socket.gethostname()
 
-        # Create a timestamp for the current data
-        current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        file_name = f'replication_data_{current_time}.txt'
+        # Write the result to the output CSV
+        with open(output_csv, mode='w', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(["Datetime", "Hostname", "Count"])
+            writer.writerow([current_datetime, hostname, script_output])
 
-        # Write data to a text file
-        with open(file_name, 'w') as file:
-            file.write("pg_stat_replication data:\n")
-            for row in replication_data:
-                file.write(str(row) + '\n')
-
-            file.write("\npg_replication_slots data:\n")
-            for row in slots_data:
-                file.write(str(row) + '\n')
-
-        # Log success
-        logging.info(f'Data saved to {file_name}')
-
-        return file_name
-
+        print(f"Result from {script_path} with arguments {args} saved to {output_csv}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error running {script_path} with arguments {args}: {e}")
     except Exception as e:
-        # Log error
-        logging.error(f'Error fetching and saving data: {str(e)}')
-        return None
-
-# Function to push data to Confluence
-def push_to_confluence(file_name):
-    try:
-        # Initialize Confluence API
-        confluence = Confluence(url=confluence_url, username=confluence_username, password=confluence_password)
-        
-        # Upload the data file to Confluence
-        confluence.attach_page(
-            page_id='your_page_id',
-            file_path=file_name,
-            space_key=confluence_space_key,
-            title=f'Replication Data {datetime.now().strftime("%Y-%m-%d")}'
-        )
-
-        # Log success
-        logging.info(f'Data pushed to Confluence')
-
-    except Exception as e:
-        # Log error
-        logging.error(f'Error pushing data to Confluence: {str(e)}')
-
-if __name__ == '__main__':
-    while True:
-        # Fetch and save data
-        data_file = fetch_and_save_data()
-
-        if data_file:
-            # Push data to Confluence once a week
-            current_time = datetime.now()
-            if current_time.weekday() == 0 and current_time.hour == 0 and current_time.minute == 0:
-                push_to_confluence(data_file)
-
-        # Wait for 4 minutes before the next iteration
-        next_run = datetime.now() + timedelta(minutes=4)
-        while datetime.now() < next_run:
-            pass
+        print(f"Error: {e}")
