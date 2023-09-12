@@ -12,11 +12,12 @@ def run_script_with_args_and_capture_output(script_path, args, output_csv):
     try:
         # Run the shell script with arguments
         command = [script_path] + args
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        command_str = ' '.join(command)
+        process = subprocess.Popen(command_str, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         stdout, stderr = process.communicate()
 
         if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, script_path, stderr)
+            raise subprocess.CalledProcessError(process.returncode, command_str, stderr)
 
         # Capture the script's output (assuming it's a numeric count)
         script_output = stdout.decode().strip()
@@ -31,22 +32,27 @@ def run_script_with_args_and_capture_output(script_path, args, output_csv):
             writer.writerow(["Datetime", "Hostname", "Count"])
             writer.writerow([current_datetime, hostname, script_output])
 
-        print(f"Result from {script_path} with arguments {args} saved to {output_csv}")
+        print("Result from {} with arguments {} saved to {}".format(script_path, args, output_csv))
     except subprocess.CalledProcessError as e:
-        print(f"Error running {script_path} with arguments {args}: {e}")
+        print("Error running {} with arguments {}: {}".format(script_path, args, e))
     except Exception as e:
-        print(f"Error: {e}")
+        print("Error: {}".format(e))
 
 # Function to upload a file to Confluence using curl
 def upload_to_confluence_with_curl(file_to_upload, page_id):
     try:
         # Construct the curl command to upload the file
-        curl_command = f'curl -u "your-username:your-password" -X POST -H "X-Atlassian-Token: no-check" ' \
-                       f'-F "file=@{file_to_upload}" ' \
-                       f'https://your-confluence-instance/wiki/rest/api/content/{page_id}/child/attachment'
+        curl_command = [
+            'curl',
+            '-u', 'your-username:your-password',
+            '-X', 'POST',
+            '-H', 'X-Atlassian-Token: no-check',
+            '-F', f'file=@{file_to_upload}',
+            f'https://your-confluence-instance/wiki/rest/api/content/{page_id}/child/attachment'
+        ]
 
         # Execute the curl command
-        subprocess.run(curl_command, shell=True, check=True)
+        subprocess.run(curl_command, check=True)
 
         print(f"File {file_to_upload} uploaded successfully to Confluence.")
     except subprocess.CalledProcessError as e:
@@ -106,7 +112,7 @@ def run_script_and_diff_and_log():
         ["arg15", "arg16"],
         # Arguments for the ninth run
         ["arg17", "arg18"],
-        ## Arguments for the tenth run
+        # Arguments for the tenth run
         ["arg19", "arg20"],
         # Arguments for the eleventh run
         ["arg21", "arg22"],
@@ -154,12 +160,4 @@ def compare_and_highlight_diff(file1, file2, output_csv):
 schedule.every(4).hours.do(run_script_and_diff_and_log)
 
 # Schedule the script to upload to Confluence at 11:55 pm
-schedule.every().day.at("23:55").do(upload_to_confluence_with_curl, rpt_hostname_csv, page_id='your-page-id')
-
-# Run the script initially
-run_script_and_diff_and_log()
-
-# Keep the script running to execute scheduled tasks
-while True:
-    schedule.run_pending()
-    time.sleep(1)  # Sleep for 1 second to avoid excessive CPU usage
+schedule.every().day.at("23:55").do(upload_to_confluence_with_curl, rpt_hostname_csv, page_id='your
