@@ -1,0 +1,21 @@
+# Function to upload a file to Confluence using curl
+def upload_to_confluence_with_curl(file_to_upload, page_id):
+    try:
+        # Construct the curl command to upload the file
+        curl_command = [
+            'curl',
+            '-u', 'your-username:your-password',
+            '-X', 'POST',
+            '-H', 'X-Atlassian-Token: no-check',
+            '-F', f'file=@{file_to_upload}',
+            f'https://your-confluence-instance/wiki/rest/api/content/{page_id}/child/attachment'
+        ]
+
+        # Execute the curl command
+        subprocess.run(curl_command, check=True)
+
+        print(f"File {file_to_upload} uploaded successfully to Confluence.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error uploading file {file_to_upload} to Confluence: {e}")
+    except Exception as e:
+        print(f"Error: {e}")
