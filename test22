@@ -1,117 +1,120 @@
 import os
-import schedule
-import time
-import datetime
+import subprocess
+import csv
+import difflib
+from datetime import datetime
 import socket
-import psycopg2
-import requests
-import logging
-from tabulate import tabulate
 
-# Configure logging
-logging.basicConfig(
-    filename="replication_stats.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
-
-# Set your PostgreSQL connection parameters
-db_params = {
-    "host": "your_postgres_host",
-    "database": "your_database",
-    "user": "your_user",
-    "password": "your_password",
-}
-
-# Set the Confluence API endpoint and credentials
-confluence_url = "https://your-confluence-site/wiki/rest/api/content/YOUR_PAGE_ID"
-confluence_username = "your_username"
-confluence_password = "your_password"
-
-# Directory to store data files
-data_directory = "data"
-
-# Function to fetch replication statistics and slots and format them as a table
-def get_replication_stats():
+# Function to run a shell script with arguments and capture its output in a CSV file
+def run_script_with_args_and_capture_output(script_path, args, output_csv):
     try:
-        connection = psycopg2.connect(**db_params)
-        cursor = connection.cursor()
+        # Run the shell script with arguments
+        command = [script_path] + args
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        stdout, stderr = process.communicate()
 
-        # Get replication statistics with headers
-        cursor.execute("SELECT * FROM pg_stat_replication;")
-        replication_stats = cursor.fetchall()
-        replication_stats.insert(0, [desc[0] for desc in cursor.description])
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, script_path, stderr)
 
-        # Get replication slots with headers
-        cursor.execute("SELECT * FROM pg_replication_slots;")
-        replication_slots = cursor.fetchall()
-        replication_slots.insert(0, [desc[0] for desc in cursor.description])
+        # Capture the script's output (assuming it's a numeric count)
+        script_output = stdout.decode().strip()
 
-        return replication_stats, replication_slots
+        # Get the current date and hostname
+        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        hostname = socket.gethostname()
+
+        # Create the output CSV filename based on the hostname
+        output_csv_filename = f"{output_csv}_{hostname}.csv"
+
+        # Write the result to the output CSV
+        with open(output_csv_filename, mode='w', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(["Datetime", "Hostname", "Count"])
+            writer.writerow([current_datetime, hostname, script_output])
+
+        print(f"Result from {script_path} with arguments {args} saved to {output_csv_filename}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error running {script_path} with arguments {args}: {e}")
     except Exception as e:
-        logging.error("Error fetching replication stats: %s", str(e))
-    finally:
-        if connection:
-            connection.close()
+        print(f"Error: {e}")
 
-# Function to write data to a text file with timestamp and hostname
-def write_to_file(data):
-    current_week = datetime.datetime.now().strftime("%U")
-    filename = os.path.join(data_directory, f"replication_stats_week_{current_week}.txt")
-    
-    with open(filename, "a") as file:
-        file.write("\n\n")
-        file.write(f"Datetime: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        file.write(f"Hostname: {socket.gethostname()}\n\n")
-        file.write("Replication Statistics:\n")
-        file.write(tabulate(data[0], headers="firstrow", tablefmt="grid") + "\n\n")
-        file.write("Replication Slots:\n")
-        file.write(tabulate(data[1], headers="firstrow", tablefmt="grid") + "\n")
-    
-    return filename
+# Run the replication.sh script with arguments from the current location
+current_directory = os.getcwd()
+replication_script_path = os.path.join(current_directory, "replication.sh")
 
-# Function to publish file content to Confluence
-def publish_to_confluence(filename):
-    headers = {
-        "Content-Type": "application/json",
-    }
-    auth = (confluence_username, confluence_password)
+# Define arguments for the replication.sh script for each of the 12 runs
+replication_script_args = [
+    # Arguments for the first run
+    ["arg1", "arg2"],
+    # Arguments for the second run
+    ["arg3", "arg4"],
+    # Arguments for the third run
+    ["arg5", "arg6"],
+    # Arguments for the fourth run
+    ["arg7", "arg8"],
+    # Arguments for the fifth run
+    ["arg9", "arg10"],
+    # Arguments for the sixth run
+    ["arg11", "arg12"],
+    # Arguments for the seventh run
+    ["arg13", "arg14"],
+    # Arguments for the eighth run
+    ["arg15", "arg16"],
+    # Arguments for the ninth run
+    ["arg17", "arg18"],
+    # Arguments for the tenth run
+    ["arg19", "arg20"],
+    # Arguments for the eleventh run
+    ["arg21", "arg22"],
+    # Arguments for the twelfth run
+    ["arg23", "arg24"],
+]
 
-    with open(filename, "r") as file:
-        content = file.read()
+# Paths to your 12 shell scripts and output CSV files
+script_paths = [
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+]
 
-    data = {
-        "version": {
-            "number": "2"  # Increment this number each time you update the content
-        },
-        "title": "Replication Stats",  # Set your Confluence page title
-        "type": "page",
-        "body": {
-            "storage": {
-                "value": content,
-                "representation": "storage",
-            }
-        }
-    }
+# Define the base filenames for output CSVs and diff
+output_csv1_base = "LMS"
+output_csv2_base = "RPT"
+diff_csv_base = "diff"
 
-    response = requests.put(confluence_url, headers=headers, auth=auth, json=data)
-    if response.status_code == 200:
-        logging.info("Published to Confluence successfully.")
-        os.remove(filename)  # Remove the file after publishing
+# Run each script with its respective arguments and capture the output in custom-named CSVs
+for i in range(12):
+    if i < 6:
+        run_script_with_args_and_capture_output(script_paths[i], replication_script_args[i], output_csv1_base)
     else:
-        logging.error("Error publishing to Confluence: %s", response.text)
+        run_script_with_args_and_capture_output(script_paths[i], replication_script_args[i], output_csv2_base)
 
-# Schedule the task to run every 2 minutes
-schedule.every(2).minutes.do(lambda: write_to_file(get_replication_stats()))
+# Compare the two CSV files and create a new CSV with differences
+with open(f"{output_csv1_base}_{socket.gethostname()}.csv", 'r') as file1, open(f"{output_csv2_base}_{socket.gethostname()}.csv", 'r') as file2:
+    lines1 = file1.readlines()
+    lines2 = file2.readlines()
 
-# Schedule the publishing task to run every hour
-schedule.every().hour.do(lambda: publish_to_confluence(write_to_file(get_replication_stats())))
+differ = difflib.Differ()
+diff = list(differ.compare(lines1, lines2))
 
-# Create the data directory if it doesn't exist
-os.makedirs(data_directory, exist_ok=True)
+# Create a new CSV file with differences
+diff_output_csv_filename = f"{diff_csv_base}_{socket.gethostname()}.csv"
 
-# Run the scheduled tasks
-while True:
-    schedule.run_pending()
-    time.sleep(1)
+with open(diff_output_csv_filename, 'w', newline='') as diff_csv_file:
+    diff_csv_writer = csv.writer(diff_csv_file)
+    diff_csv_writer.writerow(["Datetime", "Hostname", "Difference"])
+    
+    for line in diff:
+        if line.startswith('- ') or line.startswith('+ '):
+            diff_csv_writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), socket.gethostname(), line])
+
+print(f"Differences between CSV files saved to {diff_output_csv_filename}.")
