@@ -2,12 +2,12 @@
 def run_script_with_args_and_capture_output(script_path, args, output_csv):
     try:
         # Run the shell script with arguments
-        command = f"{script_path} {' '.join(args)}"  # Construct the command as a string
+        command = [script_path] + args
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         stdout, stderr = process.communicate()
 
         if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, command, stderr)
+            raise subprocess.CalledProcessError(process.returncode, ' '.join(command), stderr)
 
         # Capture the script's output (assuming it's a numeric count)
         script_output = stdout.decode().strip()
