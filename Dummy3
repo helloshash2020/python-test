@@ -2,8 +2,11 @@ import os
 import subprocess
 import csv
 import difflib
-from datetime import datetime
+from datetime import datetime, timedelta
 import socket
+import schedule
+import time
+import requests
 
 # Function to run a shell script with arguments and capture its output in a CSV file
 def run_script_with_args_and_capture_output(script_path, args, output_csv):
@@ -35,81 +38,115 @@ def run_script_with_args_and_capture_output(script_path, args, output_csv):
     except Exception as e:
         print(f"Error: {e}")
 
-# Run the replication.sh script with arguments from the current location
-current_directory = os.getcwd()
-replication_script_path = os.path.join(current_directory, "replication.sh")
+# Function to upload to Confluence
+def upload_to_confluence():
+    # Confluence API URL and authentication credentials
+    confluence_url = "https://your-confluence-instance/wiki/rest/api/content/{pageId}/child/attachment"
+    username = "your-username"
+    password = "your-password"
 
-# Define arguments for the replication.sh script for each of the 12 runs
-replication_script_args = [
-    # Arguments for the first run
-    ["arg1", "arg2"],
-    # Arguments for the second run
-    ["arg3", "arg4"],
-    # Arguments for the third run
-    ["arg5", "arg6"],
-    # Arguments for the fourth run
-    ["arg7", "arg8"],
-    # Arguments for the fifth run
-    ["arg9", "arg10"],
-    # Arguments for the sixth run
-    ["arg11", "arg12"],
-    # Arguments for the seventh run
-    ["arg13", "arg14"],
-    # Arguments for the eighth run
-    ["arg15", "arg16"],
-    # Arguments for the ninth run
-    ["arg17", "arg18"],
-    # Arguments for the tenth run
-    ["arg19", "arg20"],
-    # Arguments for the eleventh run
-    ["arg21", "arg22"],
-    # Arguments for the twelfth run
-    ["arg23", "arg24"],
-]
+    # Files to upload
+    lms_hostname_csv = f"LMS_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    rpt_hostname_csv = f"RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    diff_output_csv = f"LMS-RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
 
-# Paths to your 12 shell scripts and output CSV files
-script_paths = [
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-    replication_script_path,
-]
+    # Define the headers with authentication credentials
+    headers = {
+        "Content-Type": "multipart/form-data",
+    }
+    auth = (username, password)
 
-# Define output CSV file names with specific formats
-output_csv1 = f"LMS_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
-output_csv2 = f"RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
-diff_output_csv = f"LMS-RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    # Upload the LMS CSV file to Confluence
+    upload_file_to_confluence(confluence_url, lms_hostname_csv, headers, auth)
 
-# Run each script with its respective arguments and capture the output in CSV1 and CSV2
-for i in range(12):
-    run_script_with_args_and_capture_output(script_paths[i], replication_script_args[i], output_csv1 if i < 6 else output_csv2)
+    # Upload the RPT CSV file to Confluence
+    upload_file_to_confluence(confluence_url, rpt_hostname_csv, headers, auth)
 
-# Compare the two CSV files and create a new CSV with differences
-with open(output_csv1, 'r') as file1, open(output_csv2, 'r') as file2:
-    lines1 = file1.readlines()
-    lines2 = file2.readlines()
+    # Upload the diff CSV file to Confluence
+    upload_file_to_confluence(confluence_url, diff_output_csv, headers, auth)
 
-differ = difflib.Differ()
-diff = list(differ.compare(lines1, lines2))
+    # Remove old files after uploading to Confluence
+    remove_old_files()
 
-# Create a new CSV file with differences and sort it based on table schema
-with open(diff_output_csv, 'w', newline='') as diff_csv_file:
-    diff_csv_writer = csv.writer(diff_csv_file)
-    diff_csv_writer.writerow(["Datetime", "Hostname", "Difference"])
-    
-    # Sort the differences based on table schema
-    diff.sort()
-    
-    for line in diff:
-        if line.startswith('- ') or line.startswith('+ '):
-            diff_csv_writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), socket.gethostname(), line])
+# Function to upload a file to Confluence
+def upload_file_to_confluence(confluence_url, file_to_upload, headers, auth):
+    try:
+        with open(file_to_upload, "rb") as file:
+            files = {
+                "file": (file_to_upload, file),
+            }
+            response = requests.post(confluence_url, headers=headers, auth=auth, files=files)
+            if response.status_code == 200:
+                print(f"File {file_to_upload} uploaded successfully to Confluence.")
+            else:
+                print(f"Failed to upload file {file_to_upload}. Status code: {response.status_code}")
+    except Exception as e:
+        print(f"Error uploading file {file_to_upload} to Confluence: {str(e)}")
 
-print("Differences between CSV files saved to diff_output.csv and sorted based on table schema.")
+# Function to remove old files
+def remove_old_files():
+    # Specify the maximum age (in days) for files to be considered old
+    max_age_days = 30  # Adjust this value as needed
+
+    # List all files in the current directory
+    files = os.listdir()
+
+    # Get the current date
+    current_date = datetime.now()
+
+    for file in files:
+        # Check if the file matches the naming convention of old files (e.g., "LMS_*_*.csv")
+        if file.startswith("LMS_") and file.endswith(".csv"):
+            # Extract the date from the filename
+            date_str = file.split("_")[1]  # Assumes date is the second part of the filename
+            file_date = datetime.strptime(date_str, "%Y-%m-%d")
+
+            # Calculate the age of the file in days
+            file_age = (current_date - file_date).days
+
+            # If the file is older than the maximum age, delete it
+            if file_age > max_age_days:
+                os.remove(file)
+                print(f"Removed old file: {file}")
+
+# Function to run the script and perform the diff and logging
+def run_script_and_diff_and_log():
+    # Run the replication.sh script with arguments from the current location
+    current_directory = os.getcwd()
+    replication_script_path = os.path.join(current_directory, "replication.sh")
+
+    # Define arguments for the replication.sh script for each of the 12 runs
+    replication_script_args = [
+        # Arguments for the first run
+        ["arg1", "arg2"],
+        # Arguments for the second run
+        ["arg3", "arg4"],
+        # Arguments for the third run
+        ["arg5", "arg6"],
+        # Arguments for the fourth run
+        ["arg7", "arg8"],
+        # Arguments for the fifth run
+        ["arg9", "arg10"],
+        # Arguments for the sixth run
+        ["arg11", "arg12"],
+        # Arguments for the seventh run
+        ["arg13", "arg14"],
+        # Arguments for the eighth run
+        ["arg15", "arg16"],
+        # Arguments for the ninth run
+        ["arg17", "arg18"],
+        # Arguments for the tenth run
+        ["arg19", "arg20"],
+        # Arguments for the eleventh run
+        ["arg21", "arg22"],
+        # Arguments for the twelfth run
+        ["arg23", "arg24"],
+    ]
+
+    # Define output CSV file names with specific formats
+    lms_hostname_csv = f"LMS_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    rpt_hostname_csv = f"RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    diff_output_csv = f"LMS-RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    log_file = "script_log.txt"
+
+    # Run each script with its respective arguments and capture the output
