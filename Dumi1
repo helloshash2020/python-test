@@ -161,3 +161,14 @@ schedule.every(4).hours.do(run_script_and_diff_and_log)
 
 # Schedule the script to upload to Confluence at 11:55 pm
 schedule.every().day.at("23:55").do(upload_to_confluence_with_curl, rpt_hostname_csv, page_id='your
+# Schedule the script to upload to Confluence at 11:55 pm
+schedule.every().day.at("23:55").do(upload_to_confluence_with_curl, rpt_hostname_csv, page_id='your-page-id')
+
+# Run the script initially
+run_script_and_diff_and_log()
+
+# Keep the script running to execute scheduled tasks
+while True:
+    schedule.run_pending()
+    time.sleep(1)  # Sleep for 1 second to avoid excessive CPU usage
+
