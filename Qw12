@@ -1,0 +1,86 @@
+import os
+import subprocess
+import pandas as pd
+from datetime import datetime
+import socket
+import sys
+
+# Function to run a shell script with arguments and capture its output in a CSV file
+def run_script_with_args_and_capture_output(script_path, args, output_csv):
+    try:
+        # Run the shell script with arguments
+        command = [script_path] + args
+        command_str = ' '.join(command)
+        process = subprocess.Popen(command_str, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        stdout, stderr = process.communicate()
+
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, command_str, stderr)
+
+        # Capture the script's output (assuming it's a numeric count)
+        script_output = stdout.decode().strip()
+
+        # Get the current date and hostname
+        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        hostname = socket.gethostname()
+
+        # Create a DataFrame and save it as CSV
+        data = {"Datetime": [current_datetime], "Hostname": [hostname], "Count": [script_output]}
+        df = pd.DataFrame(data)
+        df.to_csv(output_csv, index=False)
+
+        print("Result from {} with arguments {} saved to {}".format(script_path, args, output_csv))
+    except subprocess.CalledProcessError as e:
+        print("Error running {} with arguments {}: {}".format(script_path, args, e))
+    except Exception as e:
+        print("Error: {}".format(e))
+
+# Function to compare two CSV files and highlight the differences
+def compare_and_highlight_diff(file1, file2, output_csv):
+    try:
+        # Read the CSV files into DataFrames
+        df1 = pd.read_csv(file1)
+        df2 = pd.read_csv(file2)
+
+        # Perform a full outer join to find differences
+        merged = df1.merge(df2, on=['Datetime', 'Hostname'], how='outer', indicator=True)
+        differences = merged[merged['_merge'] != 'both'].drop('_merge', axis=1)
+
+        # Save the differences as CSV
+        differences.to_csv(output_csv, index=False)
+
+        print(f"Differences between {file1} and {file2} saved to {output_csv}")
+    except Exception as e:
+        print(f"Error comparing and highlighting differences: {e}")
+
+# Define output CSV file names with specific formats
+lms_hostname_csv = f"LMS_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+rpt_hostname_csv = f"RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+diff_output_csv = f"LMS-RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}_diff.csv"
+
+# Replace 'replication.sh' with the actual script path
+replication_script_path = "/path/to/replication.sh"
+
+# Define arguments for the replication.sh script for each of the 12 runs
+replication_script_args = [
+    # Arguments for the first run
+    ["arg1", "arg2"],
+    # Arguments for the second run
+    ["arg3", "arg4"],
+    # Arguments for the third run
+    ["arg5", "arg6"],
+    # Arguments for the fourth run
+    ["arg7", "arg8"],
+    # Arguments for the fifth run
+    ["arg9", "arg10"],
+    # Arguments for the sixth run
+    ["arg11", "arg12"],
+]
+
+# Run each script with its respective arguments and capture the output
+for i, args in enumerate(replication_script_args):
+    output_csv = lms_hostname_csv if i < 6 else rpt_hostname_csv
+    run_script_with_args_and_capture_output(replication_script_path, args, output_csv)
+
+# Compare the two CSV files and write the differences to the diff_output_csv
+compare_and_highlight_diff(lms_hostname_csv, rpt_hostname_csv, diff_output_csv)
