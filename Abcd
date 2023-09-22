@@ -1,0 +1,168 @@
+import os
+import subprocess
+import csv
+import difflib
+from datetime import datetime
+import socket
+import requests
+
+# Function to run a shell script with arguments and capture its output in a CSV file
+def run_script_with_args_and_capture_output(script_path, args, output_csv):
+    try:
+        # Run the shell script with arguments
+        command = [script_path] + args
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        stdout, stderr = process.communicate()
+
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, script_path, stderr)
+
+        # Capture the script's output (assuming it's a numeric count)
+        script_output = stdout.decode().strip()
+
+        # Get the current date and hostname
+        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        hostname = socket.gethostname()
+
+        # Write the result to the output CSV
+        with open(output_csv, mode='w', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(["Datetime", "Hostname", "Count"])
+            writer.writerow([current_datetime, hostname, script_output])
+
+        print(f"Result from {script_path} with arguments {args} saved to {output_csv}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error running {script_path} with arguments {args}: {e}")
+    except Exception as e:
+        print(f"Error: {e}")
+
+# Run the replication.sh script with arguments from the current location
+current_directory = os.getcwd()
+replication_script_path = os.path.join(current_directory, "replication.sh")
+
+# Define arguments for the replication.sh script for each of the 12 runs
+replication_script_args = [
+    # Arguments for the first run
+    ["arg1", "arg2"],
+    # Arguments for the second run
+    ["arg3", "arg4"],
+    # Arguments for the third run
+    ["arg5", "arg6"],
+    # Arguments for the fourth run
+    ["arg7", "arg8"],
+    # Arguments for the fifth run
+    ["arg9", "arg10"],
+    # Arguments for the sixth run
+    ["arg11", "arg12"],
+    # Arguments for the seventh run
+    ["arg13", "arg14"],
+    # Arguments for the eighth run
+    ["arg15", "arg16"],
+    # Arguments for the ninth run
+    ["arg17", "arg18"],
+    # Arguments for the tenth run
+    ["arg19", "arg20"],
+    # Arguments for the eleventh run
+    ["arg21", "arg22"],
+    # Arguments for the twelfth run
+    ["arg23", "arg24"],
+]
+
+# Paths to your 12 shell scripts and output CSV files
+script_paths = [
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+]
+
+# Define output CSV file names with specific formats
+output_csv1 = f"LMS_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+output_csv2 = f"RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+diff_output_csv = f"LMS-RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+
+# Directory to store files for upload to Confluence
+replication_count_directory = "replication_count"
+
+# Create the directory if it doesn't exist
+if not os.path.exists(replication_count_directory):
+    os.mkdir(replication_count_directory)
+
+# Run each script with its respective arguments and capture the output in CSV1 and CSV2
+for i in range(12):
+    run_script_with_args_and_capture_output(script_paths[i], replication_script_args[i], output_csv1 if i < 6 else output_csv2)
+
+# Compare the two CSV files and create a new CSV with differences and sort it based on table schema
+with open(output_csv1, 'r') as file1, open(output_csv2, 'r') as file2:
+    lines1 = file1.readlines()
+    lines2 = file2.readlines()
+
+differ = difflib.Differ()
+diff = list(differ.compare(lines1, lines2))
+
+# Create a new CSV file with differences
+with open(diff_output_csv, 'w', newline='') as diff_csv_file:
+    diff_csv_writer = csv.writer(diff_csv_file)
+    diff_csv_writer.writerow(["Datetime", "Hostname", "Difference"])
+    
+    # Sort the differences based on table schema
+    diff.sort()
+    
+    for line in diff:
+        if line.startswith('- ') or line.startswith('+ '):
+            diff_csv_writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), socket.gethostname(), line])
+
+print("Differences between CSV files saved to diff_output.csv and sorted based on table schema.")
+
+# Function to upload a file to Confluence using its REST API
+def upload_file_to_confluence(file_path, confluence_url, username, password):
+    try:
+        auth = (username, password)
+        headers = {
+            'X-Atlassian-Token': 'no-check',
+        }
+        # Get the current user's personal space key
+        personal_space_url = f"{confluence_url}/rest/api/user/current"
+        response = requests.get(personal_space_url, auth=auth)
+
+        if response.status_code == 200:
+            personal_space_data = response.json()
+            personal_space_key = personal_space_data['key']
+
+            # Upload the file as an attachment to the user's personal space
+            attachment_url = f"{confluence_url}/rest/api/content/{personal_space_key}/child/attachment"
+            files = {'file': (os.path.basename(file_path), open(file_path, 'rb'))}
+            response = requests.post(attachment_url, auth=auth, headers=headers, files=files)
+
+            if response.status_code == 200:
+                print(f"Uploaded {file_path} to Confluence.")
+            else:
+                print(f"Error uploading {file_path} to Confluence. Status code: {response.status_code}")
+        else:
+            print("Error retrieving personal space key from Confluence.")
+
+    except Exception as e:
+        print(f"Error uploading file to Confluence: {e}")
+
+# Upload the files to the user's personal space
+confluence_url = "YOUR_CONFLUENCE_URL"
+confluence_username = "YOUR_USERNAME"
+confluence_password = "YOUR_PASSWORD"
+
+file_paths = [output_csv1, output_csv2, diff_output_csv]
+
+for file_path in file_paths:
+    upload_file_to_confluence(file_path, confluence_url, confluence_username, confluence_password)
+
+# Remove the uploaded files
+for file_path in file_paths:
+    os.remove(file_path)
+    print(f"Removed {file_path}.")
