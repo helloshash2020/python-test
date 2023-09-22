@@ -1,0 +1,58 @@
+# ... (previous code)
+
+# Function to run the script and perform the diff and logging
+def run_script_and_diff_and_log():
+    # Run the replication.sh script with arguments from the current location
+    current_directory = os.getcwd()
+    replication_script_path = os.path.join(current_directory, "replication.sh")
+
+    # Define arguments for the replication.sh script for each of the 12 runs
+    replication_script_args = [
+        # Arguments for the first run
+        ["arg1", "arg2"],
+        # Arguments for the second run
+        ["arg3", "arg4"],
+        # Arguments for the third run
+        ["arg5", "arg6"],
+        # Arguments for the fourth run
+        ["arg7", "arg8"],
+        # Arguments for the fifth run
+        ["arg9", "arg10"],
+        # Arguments for the sixth run
+        ["arg11", "arg12"],
+        # Arguments for the seventh run
+        ["arg13", "arg14"],
+        # Arguments for the eighth run
+        ["arg15", "arg16"],
+        # Arguments for the ninth run
+        ["arg17", "arg18"],
+        # Arguments for the tenth run
+        ["arg19", "arg20"],
+        # Arguments for the eleventh run
+        ["arg21", "arg22"],
+        # Arguments for the twelfth run
+        ["arg23", "arg24"],
+    ]
+
+    # Define output CSV file names with specific formats
+    lms_hostname_csv = f"LMS_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    rpt_hostname_csv = f"RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    diff_output_csv = f"LMS-RPT_{socket.gethostname()}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    log_file = "script_log.txt"
+
+    # Run each script with its respective arguments and capture the output
+    for i, args in enumerate(replication_script_args):
+        output_csv = lms_hostname_csv if i < 6 else rpt_hostname_csv
+        run_script_with_args_and_capture_output(replication_script_path, args, output_csv)
+
+    # Compare the two CSV files and write the differences to the diff_output_csv
+    compare_and_highlight_diff(lms_hostname_csv, rpt_hostname_csv, diff_output_csv)
+
+    # Remove old files after uploading to Confluence
+    remove_old_files()
+
+# Upload the report to Confluence
+upload_to_confluence_with_curl(rpt_hostname_csv, page_id='your-page-id')
+
+# Run the script initially
+run_script_and_diff_and_log()
