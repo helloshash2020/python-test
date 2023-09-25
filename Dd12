@@ -1,0 +1,187 @@
+import os
+import subprocess
+import csv
+from datetime import datetime
+import socket
+import difflib
+import requests
+
+# Function to run a shell script with arguments and capture its output
+def run_script_with_args(script_path, args):
+    try:
+        # Run the shell script with arguments
+        command = [script_path] + args
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        stdout, stderr = process.communicate()
+
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, script_path, stderr)
+
+        # Capture the script's output and error
+        script_output = stdout.decode().strip()
+        script_error = stderr.decode().strip()
+        return script_output, script_error
+    except subprocess.CalledProcessError as e:
+        print(f"Error running {script_path} with arguments {args}: {e}")
+        return None, str(e)
+    except Exception as e:
+        print(f"Error: {e}")
+        return None, str(e)
+
+# Run the replication.sh script with arguments from the current location
+current_directory = os.getcwd()
+replication_script_path = os.path.join(current_directory, "replication.sh")
+
+# Define arguments for the replication.sh script for each of the 12 runs
+replication_script_args = [
+    # Arguments for the first run
+    ["arg1", "arg2"],
+    # Arguments for the second run
+    ["arg3", "arg4"],
+    # Arguments for the third run
+    ["arg5", "arg6"],
+    # Arguments for the fourth run
+    ["arg7", "arg8"],
+    # Arguments for the fifth run
+    ["arg9", "arg10"],
+    # Arguments for the sixth run
+    ["arg11", "arg12"],
+    # Arguments for the seventh run
+    ["arg13", "arg14"],
+    # Arguments for the eighth run
+    ["arg15", "arg16"],
+    # Arguments for the ninth run
+    ["arg17", "arg18"],
+    # Arguments for the tenth run
+    ["arg19", "arg20"],
+    # Arguments for the eleventh run
+    ["arg21", "arg22"],
+    # Arguments for the twelfth run
+    ["arg23", "arg24"],
+]
+
+# Paths to your 12 shell scripts
+script_paths = [
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+    replication_script_path,
+]
+
+# Get the current date and time
+current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+# Define output file names with date and time
+output_csv1 = f"LMS_{socket.gethostname()}_{current_datetime}.csv"
+output_csv2 = f"RPT_{socket.gethostname()}_{current_datetime}.csv"
+diff_output_csv = f"LMS-RPT_{socket.gethostname()}_{current_datetime}.csv"
+
+# Directory to store files for upload to Confluence
+replication_count_directory = "replication_count"
+
+# Create the directory if it doesn't exist
+if not os.path.exists(replication_count_directory):
+    os.mkdir(replication_count_directory)
+
+# Run each script with its respective arguments and capture the output
+output_data1 = []
+output_data2 = []
+
+# Add debugging information
+print(f"Script Output for Each Run:")
+for i in range(12):
+    script_output, script_error = run_script_with_args(script_paths[i], replication_script_args[i])
+    
+    if script_output is not None:
+        print(f"Run {i+1} Output:")
+        print(script_output)
+        
+        # Split the script output into lines
+        lines = script_output.split('\n')
+        
+        # Parse and extract schema name, table name, and data count from each line
+        for line in lines:
+            parts = line.split(',')
+            if len(parts) == 3:
+                schema_name, table_name, data_count = parts
+                hostname = socket.gethostname()
+                row = [current_datetime, hostname, schema_name.strip(), table_name.strip(), data_count.strip()]
+                
+                if i < 6:
+                    output_data1.append(row)
+                else:
+                    output_data2.append(row)
+
+# Write the output data to CSV1 and CSV2
+with open(os.path.join(replication_count_directory, output_csv1), 'w', newline='') as csv_file1, open(os.path.join(replication_count_directory, output_csv2), 'w', newline='') as csv_file2:
+    csv_writer1 = csv.writer(csv_file1)
+    csv_writer2 = csv.writer(csv_file2)
+    
+    # Write headers to the files
+    csv_writer1.writerow(["Datetime", "Hostname", "Schema Name", "Table Name", "Data Count"])
+    csv_writer2.writerow(["Datetime", "Hostname", "Schema Name", "Table Name", "Data Count"])
+    
+    csv_writer1.writerows(output_data1)
+    csv_writer2.writerows(output_data2)
+
+print(f"Saved results to {output_csv1} and {output_csv2}.")
+
+# Compare the two CSV files and create a new CSV with differences
+with open(os.path.join(replication_count_directory, output_csv1), 'r') as file1, open(os.path.join(replication_count_directory, output_csv2), 'r') as file2:
+    lines1 = file1.readlines()
+    lines2 = file2.readlines()
+
+differ = difflib.Differ()
+diff = list(differ.compare(lines1, lines2))
+
+# Create a new CSV file with differences
+with open(os.path.join(replication_count_directory, diff_output_csv), 'w', newline='') as diff_csv_file:
+    diff_csv_file.write("Difference\n")
+    
+    for line in diff:
+        if line.startswith('- ') or line.startswith('+ '):
+            diff_csv_file.write(line)
+
+print(f"Differences between {output_csv1} and {output_csv2} saved to {diff_output_csv}.")
+
+# Upload files to Confluence (replace with your Confluence credentials and parameters)
+confluence_url = "YOUR_CONFLUENCE_URL"
+username = "YOUR_USERNAME"
+password = "YOUR_PASSWORD"
+page_id = "YOUR_PAGE_ID"
+
+files_to_upload = [output_csv1, output_csv2, diff_output_csv]
+
+for file_to_upload in files_to_upload:
+    with open(os.path.join(replication_count_directory, file_to_upload), 'rb') as file:
+        headers = {
+            "X-Atlassian-Token": "no-check",
+        }
+        data = {
+            "file": (file_to_upload, file),
+        }
+        response = requests.post(
+            f"{confluence_url}/rest/api/content/{page_id}/child/attachment",
+            headers=headers,
+            auth=(username, password),
+            files=data,
+        )
+        if response.status_code == 200:
+            print(f"Uploaded {file_to_upload} to Confluence successfully.")
+        else:
+            print(f"Failed to upload {file_to_upload} to Confluence. Status code: {response.status_code}")
+
+# Remove the uploaded files
+for file_to_upload in files_to_upload:
+    os.remove(os.path.join(replication_count_directory, file_to_upload))
+    print(f"Removed {file_to_upload} after uploading to Confluence.")
+
+print("Script completed successfully.")
