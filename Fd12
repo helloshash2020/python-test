@@ -1,0 +1,9 @@
+# Inside the loop for running the script
+for i in range(12):
+    script_output = run_script_with_args(script_paths[i], replication_script_args[i])
+    
+    if script_output is not None:
+        print(f"Script Output ({i}):")
+        print(script_output)
+        
+        # ... rest of the code
