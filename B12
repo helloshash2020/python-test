@@ -1,3 +1,29 @@
+
+# Inside the loop for running the script
+for i in range(12):
+    script_output = run_script_with_args(script_paths[i], replication_script_args[i])
+    
+    if script_output is not None:
+        print(f"Script Output ({i}):")
+        print(script_output)
+        
+        # Add debugging info
+        print(f"Output CSV1 Path: {output_csv1}")
+        print(f"Output CSV2 Path: {output_csv2}")
+
+        try:
+            # Write data to CSV files here
+
+        except Exception as e:
+            print(f"Error writing to CSV: {e}")
+
+        # ... rest of the code
+
+
+
+
+
+
 # Compare the two CSV files and create a new CSV with differences
 with open(output_csv1, 'r') as file1, open(output_csv2, 'r') as file2:
     lines1 = file1.readlines()
