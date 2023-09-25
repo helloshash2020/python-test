@@ -1,0 +1,36 @@
+import os
+import requests
+
+# Function to upload a file to Confluence using its REST API
+def upload_file_to_confluence(file_path, confluence_url, username, password):
+    try:
+        auth = (username, password)
+        headers = {
+            'X-Atlassian-Token': 'no-check',
+        }
+        
+        # Upload the file as an attachment to Confluence without specifying a space or page
+        attachment_url = f"{confluence_url}/rest/api/content/{page_id}/child/attachment"
+        files = {'file': (os.path.basename(file_path), open(file_path, 'rb'))}
+        response = requests.post(attachment_url, auth=auth, headers=headers, files=files)
+
+        if response.status_code == 200:
+            print(f"Uploaded {file_path} to Confluence.")
+        else:
+            print(f"Error uploading {file_path} to Confluence. Status code: {response.status_code}")
+
+    except Exception as e:
+        print(f"Error uploading file to Confluence: {e}")
+
+# Upload the files to Confluence without specifying a space or page
+confluence_url = "YOUR_CONFLUENCE_URL"
+confluence_username = "YOUR_USERNAME"
+confluence_password = "YOUR_PASSWORD"
+
+# Specify the paths of the files you want to upload
+file_paths = ["output.csv1", "output.csv2", "diff_output.csv"]
+
+for file_path in file_paths:
+    upload_file_to_confluence(file_path, confluence_url, confluence_username, confluence_password)
+
+print("All files uploaded to Confluence.")
