@@ -176,4 +176,12 @@ for file_to_upload in files_to_upload:
         if response.status_code == 200:
             print(f"Uploaded {file_to_upload} to Confluence successfully.")
         else:
-            print(f"Failed to upload {file_to_upload} to Confluence. Status code
+        print(f"Failed to upload {file_to_upload} to Confluence. Status code: {response.status_code}")
+
+# Remove the uploaded files
+for file_to_upload in files_to_upload:
+    os.remove(file_to_upload)
+    print(f"Removed {file_to_upload} after uploading to Confluence.")
+
+print("Script completed successfully.")
+
