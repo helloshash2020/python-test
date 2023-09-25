@@ -4,6 +4,7 @@ import csv
 from datetime import datetime
 import socket
 import difflib
+import requests
 
 # Function to run a shell script with arguments and capture its output
 def run_script_with_args(script_path, args):
@@ -16,15 +17,16 @@ def run_script_with_args(script_path, args):
         if process.returncode != 0:
             raise subprocess.CalledProcessError(process.returncode, script_path, stderr)
 
-        # Capture the script's output
+        # Capture the script's output and error
         script_output = stdout.decode().strip()
-        return script_output
+        script_error = stderr.decode().strip()
+        return script_output, script_error
     except subprocess.CalledProcessError as e:
         print(f"Error running {script_path} with arguments {args}: {e}")
-        return None
+        return None, str(e)
     except Exception as e:
         print(f"Error: {e}")
-        return None
+        return None, str(e)
 
 # Run the replication.sh script with arguments from the current location
 current_directory = os.getcwd()
@@ -96,7 +98,7 @@ output_data2 = []
 # Add debugging information
 print(f"Script Output for Each Run:")
 for i in range(12):
-    script_output = run_script_with_args(script_paths[i], replication_script_args[i])
+    script_output, script_error = run_script_with_args(script_paths[i], replication_script_args[i])
     
     if script_output is not None:
         print(f"Run {i+1} Output:")
@@ -119,7 +121,7 @@ for i in range(12):
                     output_data2.append(row)
 
 # Write the output data to CSV1 and CSV2
-with open(output_csv1, 'w', newline='') as csv_file1, open(output_csv2, 'w', newline='') as csv_file2:
+with open(os.path.join(replication_count_directory, output_csv1), 'w', newline='') as csv_file1, open(os.path.join(replication_count_directory, output_csv2), 'w', newline='') as csv_file2:
     csv_writer1 = csv.writer(csv_file1)
     csv_writer2 = csv.writer(csv_file2)
     
@@ -133,7 +135,7 @@ with open(output_csv1, 'w', newline='') as csv_file1, open(output_csv2, 'w', new
 print(f"Saved results to {output_csv1} and {output_csv2}.")
 
 # Compare the two CSV files and create a new CSV with differences
-with open(output_csv1, 'r') as file1, open(output_csv2, 'r') as file2:
+with open(os.path.join(replication_count_directory, output_csv1), 'r') as file1, open(os.path.join(replication_count_directory, output_csv2), 'r') as file2:
     lines1 = file1.readlines()
     lines2 = file2.readlines()
 
@@ -141,7 +143,7 @@ differ = difflib.Differ()
 diff = list(differ.compare(lines1, lines2))
 
 # Create a new CSV file with differences
-with open(diff_output_csv, 'w', newline='') as diff_csv_file:
+with open(os.path.join(replication_count_directory, diff_output_csv), 'w', newline='') as diff_csv_file:
     diff_csv_file.write("Difference\n")
     
     for line in diff:
@@ -149,3 +151,37 @@ with open(diff_output_csv, 'w', newline='') as diff_csv_file:
             diff_csv_file.write(line)
 
 print(f"Differences between {output_csv1} and {output_csv2} saved to {diff_output_csv}.")
+
+# Upload files to Confluence (replace with your Confluence credentials and parameters)
+confluence_url = "YOUR_CONFLUENCE_URL"
+username = "YOUR_USERNAME"
+password = "YOUR_PASSWORD"
+page_id = "YOUR_PAGE_ID"
+
+files_to_upload = [output_csv1, output_csv2, diff_output_csv]
+
+for file_to_upload in files_to_upload:
+    with open(os.path.join(replication_count_directory, file_to_upload), 'rb') as file:
+        headers = {
+            "X-Atlassian-Token": "no-check",
+        }
+        data = {
+            "file": (file_to_upload, file),
+        }
+        response = requests.post(
+            f"{confluence_url}/rest/api/content/{page_id}/child/attachment",
+            headers=headers,
+            auth=(username, password),
+            files=data,
+        )
+        if response.status_code == 200:
+            print(f"Uploaded {file_to_upload} to Confluence successfully.")
+        else:
+            print(f"Failed to upload {file_to_upload} to Confluence. Status code: {response.status_code}")
+
+# Remove the uploaded files
+for file_to_upload in files_to_upload:
+    os.remove(os.path.join(replication_count_directory, file_to_upload))
+    print(f"Removed {file_to_upload} after uploading to Confluence.")
+
+print("Script completed successfully.")
