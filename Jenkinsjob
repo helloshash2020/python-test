@@ -1,0 +1,56 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Download Python File') {
+            steps {
+                script {
+                    def nexusURL = 'https://your-nexus-url/repository/your-repo-name/ProdName.py'
+                    def nexusCredentials = 'your-nexus-credentials-id'
+
+                    // Download the Python file from Nexus
+                    def downloadedFilePath = sh(script: "curl -u ${nexusCredentials} -o ProdName.py ${nexusURL}", returnStatus: true)
+
+                    if (downloadedFilePath == 0) {
+                        echo 'Python file downloaded successfully'
+                    } else {
+                        error 'Failed to download Python file from Nexus'
+                    }
+                }
+            }
+        }
+
+        stage('Run Python File') {
+            steps {
+                script {
+                    // Run the Python file
+                    def pythonCommand = "python3 ProdName.py"
+                    def runResult = sh(script: pythonCommand, returnStatus: true)
+
+                    if (runResult == 0) {
+                        echo 'Python file executed successfully'
+                    } else {
+                        error 'Failed to run Python file'
+                    }
+                }
+            }
+        }
+
+        stage('Remove Python File') {
+            steps {
+                script {
+                    // Remove the Python file
+                    sh 'rm -f ProdName.py'
+                    echo 'Python file removed'
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            // Clean up workspace
+            cleanWs()
+        }
+    }
+}
