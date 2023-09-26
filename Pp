@@ -1,0 +1,5 @@
+[
+    ["schema1", "table1"],
+    ["schema2", "table2"],
+    ["schema3", "table3"]
+]
