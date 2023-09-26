@@ -1,0 +1,48 @@
+# Database Comparison and Confluence Upload Script
+
+## Overview
+
+This Python script is designed to perform the following tasks:
+
+- Retrieve row counts for specified tables in two PostgreSQL databases (db1 and db2).
+- Generate comparison reports for db1 and db2.
+- Create an XLSX file with a styled header containing the comparison results.
+- Upload the XLSX file and two text files (db1_report.txt and db2_report.txt) to Confluence.
+
+## Prerequisites
+
+Before using this script, ensure that you have the following installed:
+
+- Python 3.x
+- Required Python libraries (psycopg2, concurrent.futures, requests, datetime, socket, openpyxl)
+
+## Configuration
+
+To use the script, you need to provide the following configuration parameters in the script:
+
+- Database connection details (db1_params and db2_params).
+- Confluence URL and authentication details (confluence_url, username, and password).
+- Confluence page ID where the files will be uploaded (page_id).
+
+## Usage
+
+1. Clone this repository to your local machine.
+2. Install the required Python libraries if not already installed: `pip install psycopg2 concurrent.futures requests openpyxl`
+3. Modify the script to provide the required configuration parameters.
+4. Run the script: `python script.py`
+
+## Output
+
+After running the script, the following files will be generated:
+
+- `combined_output_<timestamp>_<hostname>.xlsx`: An XLSX file containing the comparison results with a styled header.
+- `db1_report_<timestamp>_<hostname>.txt`: A text file with the db1 comparison report.
+- `db2_report_<timestamp>_<hostname>.txt`: A text file with the db2 comparison report.
+
+## Logging
+
+The script logs its activities to a log file named `script_<timestamp>_<hostname>.log`.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
