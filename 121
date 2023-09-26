@@ -1,0 +1,42 @@
+# Rest of your code (unchanged)
+
+# Upload combined_output.csv to Confluence
+try:
+    upload_endpoint = f"{confluence_url}/rest/api/content/{page_id}/child/attachment"
+    files = {'file': (combined_output_filename, open(combined_output_filename, 'rb'))}
+    response = requests.post(upload_endpoint, headers=headers, files=files)
+
+    if response.status_code == 200:
+        logging.info(f"{combined_output_filename} uploaded to Confluence successfully")
+    else:
+        logging.error(f"Error uploading {combined_output_filename} to Confluence. Status code: {response.status_code}")
+except Exception as e:
+    logging.error(f"Error uploading {combined_output_filename} to Confluence: {str(e)}")
+
+# Upload db1_report.txt to Confluence
+try:
+    upload_endpoint = f"{confluence_url}/rest/api/content/{page_id}/child/attachment"
+    files = {'file': (db1_report_filename, open(db1_report_filename, 'rb'))}
+    response = requests.post(upload_endpoint, headers=headers, files=files)
+
+    if response.status_code == 200:
+        logging.info(f"{db1_report_filename} uploaded to Confluence successfully")
+    else:
+        logging.error(f"Error uploading {db1_report_filename} to Confluence. Status code: {response.status_code}")
+except Exception as e:
+    logging.error(f"Error uploading {db1_report_filename} to Confluence: {str(e)}")
+
+# Upload db2_report.txt to Confluence
+try:
+    upload_endpoint = f"{confluence_url}/rest/api/content/{page_id}/child/attachment"
+    files = {'file': (db2_report_filename, open(db2_report_filename, 'rb'))}
+    response = requests.post(upload_endpoint, headers=headers, files=files)
+
+    if response.status_code == 200:
+        logging.info(f"{db2_report_filename} uploaded to Confluence successfully")
+    else:
+        logging.error(f"Error uploading {db2_report_filename} to Confluence. Status code: {response.status_code}")
+except Exception as e:
+    logging.error(f"Error uploading {db2_report_filename} to Confluence: {str(e)}")
+
+# Rest of your code (unchanged)
