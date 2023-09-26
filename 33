@@ -1,0 +1,135 @@
+import psycopg2
+import concurrent.futures
+import logging
+import csv
+import requests
+import os
+
+# Configure logging
+logging.basicConfig(filename='script.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Database connection details
+db1_params = {
+    'dbname': 'db1',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'db1_host'
+}
+
+db2_params = {
+    'dbname': 'db2',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'db2_host'
+}
+
+# Function to get row count for a table
+def get_row_count(schema, table, db_params):
+    try:
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+        cursor.execute(f"SELECT COUNT(*) FROM {schema}.{table}")
+        count = cursor.fetchone()[0]
+        logging.info(f"Processed {schema}.{table}")
+        return (schema, table, count)
+    except Exception as e:
+        logging.error(f"Error processing {schema}.{table}: {str(e)}")
+        return None
+    finally:
+        if connection:
+            connection.close()
+
+# Retrieve schema and table names from replication_list table in db1
+try:
+    conn1 = psycopg2.connect(**db1_params)
+    cursor = conn1.cursor()
+    cursor.execute("SELECT schema_name, table_name FROM replication_list")
+    schema_table_list = cursor.fetchall()
+    logging.info("Retrieved schema and table names from replication_list")
+except Exception as e:
+    logging.error(f"Error fetching data from replication_list: {str(e)}")
+    conn1.close()
+    raise
+
+# Initialize lists to store row counts
+db1_row_counts = []
+db2_row_counts = []
+difference_counts = []
+
+# Use concurrent.futures to fetch row counts concurrently
+with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:  # Adjust max_workers as needed
+    # Fetch counts for db1
+    db1_results = [executor.submit(get_row_count, schema, table, db1_params) for schema, table in schema_table_list]
+    # Fetch counts for db2
+    db2_results = [executor.submit(get_row_count, schema, table, db2_params) for schema, table in schema_table_list]
+
+    for future in concurrent.futures.as_completed(db1_results):
+        result = future.result()
+        if result is not None:
+            db1_row_counts.append(result)
+
+    for future in concurrent.futures.as_completed(db2_results):
+        result = future.result()
+        if result is not None:
+            db2_row_counts.append(result)
+
+# Calculate the difference and prepare a combined list
+combined_data = []
+for db1_entry in db1_row_counts:
+    schema, table, db1_count = db1_entry
+    for db2_entry in db2_row_counts:
+        if db2_entry[0] == schema and db2_entry[1] == table:
+            db2_count = db2_entry[2]
+            combined_data.append((schema, table, db1_count, db2_count))
+            break
+
+# Save the combined data in a CSV file
+try:
+    with open('combined_output.csv', 'w', newline='') as csv_file:
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(["Schema Name", "Table Name", "DB1 Count", "DB2 Count"])
+        for entry in combined_data:
+            schema, table, db1_count, db2_count = entry
+            csv_writer.writerow([schema, table, db1_count, db2_count])
+
+    logging.info("Combined output saved successfully")
+
+    # Upload the combined output to Confluence
+    confluence_url = 'https://your-confluence-instance.atlassian.net/wiki'  # Replace with your Confluence URL
+    page_url = 'https://your-confluence-instance.atlassian.net/wiki/pages/123456789'  # Replace with your page URL
+    username = 'your-username'  # Replace with your Confluence username
+    password = 'your-password'  # Replace with your Confluence password
+    page_id = None
+
+    headers = {
+        'Accept': 'application/json',
+    }
+
+    # Get the page ID from the page URL
+    response = requests.get(page_url, headers=headers, auth=(username, password))
+    if response.status_code == 200:
+        page_id = response.json().get('id')
+    else:
+        logging.error(f"Error getting page ID: {response.status_code}")
+
+    if page_id:
+        # Upload combined output as an attachment to the page
+        with open('combined_output.csv', 'rb') as file:
+            files = {'file': ('combined_output.csv', file)}
+            response = requests.post(
+                f'{confluence_url}/rest/api/content/{page_id}/child/attachment',
+                headers=headers,
+                auth=(username, password),
+                files=files,
+            )
+
+            if response.status_code == 200:
+                logging.info("Combined output uploaded to Confluence successfully")
+            else:
+                logging.error(f"Error uploading combined output to Confluence: {response.status_code}")
+
+    # Clean up: remove the uploaded file
+    os.remove('combined_output.csv')
+
+except Exception as e:
+    logging.error(f"Error saving combined output or uploading to Confluence: {str(e)}")
