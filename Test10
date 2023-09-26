@@ -1,0 +1,81 @@
+import psycopg2
+import requests
+import json
+
+# Function to get table counts from a database
+def get_table_counts(connection, tables):
+    counts = {}
+    cursor = connection.cursor()
+    for table in tables:
+        query = f"SELECT COUNT(*) FROM {table};"
+        cursor.execute(query)
+        count = cursor.fetchone()[0]
+        counts[table] = count
+    return counts
+
+# Load table list from JSON
+with open('table_list.json', 'r') as json_file:
+    table_list = json.load(json_file)
+
+# Database 1 Connection
+conn1 = psycopg2.connect(
+    database="your_database1",
+    user="your_user1",
+    password="your_password1",
+    host="your_host1",
+    port="your_port1"
+)
+counts1 = get_table_counts(conn1, table_list)
+conn1.close()
+
+# Database 2 Connection
+conn2 = psycopg2.connect(
+    database="your_database2",
+    user="your_user2",
+    password="your_password2",
+    host="your_host2",
+    port="your_port2"
+)
+counts2 = get_table_counts(conn2, table_list)
+conn2.close()
+
+# Calculate the difference
+difference = {}
+for table in table_list:
+    difference[table] = counts1[table] - counts2[table]
+
+# Create output files
+with open('database1_counts.txt', 'w') as file1:
+    file1.write(json.dumps(counts1, indent=2))
+
+with open('database2_counts.txt', 'w') as file2:
+    file2.write(json.dumps(counts2, indent=2))
+
+with open('difference_counts.txt', 'w') as diff_file:
+    diff_file.write(json.dumps(difference, indent=2))
+
+# Sample code to upload files to Confluence (you'll need to adapt this part)
+confluence_url = "https://your-confluence-instance/wiki"
+username = "your_username"
+password = "your_password"
+
+# Authenticate to Confluence
+auth = requests.auth.HTTPBasicAuth(username, password)
+
+# Define file paths
+file_paths = ['database1_counts.txt', 'database2_counts.txt', 'difference_counts.txt']
+
+# Upload files to Confluence
+for file_path in file_paths:
+    with open(file_path, 'rb') as file:
+        files = {'file': (file_path, file)}
+        response = requests.post(
+            f"{confluence_url}/rest/api/content/12345/child/attachment",
+            auth=auth,
+            files=files,
+        )
+
+# Remove uploaded files (optional)
+import os
+for file_path in file_paths:
+    os.remove(file_path)
