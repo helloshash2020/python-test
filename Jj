@@ -1,0 +1,61 @@
+import psycopg2  # Assuming PostgreSQL as the database
+
+# Database connection details
+db1_params = {
+    'dbname': 'db1',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'db1_host'
+}
+
+db2_params = {
+    'dbname': 'db2',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'db2_host'
+}
+
+# Connect to the databases
+conn1 = psycopg2.connect(**db1_params)
+conn2 = psycopg2.connect(**db2_params)
+
+# Retrieve schema and table names from replication_list table in db1
+cursor = conn1.cursor()
+cursor.execute("SELECT schema_name, table_name FROM replication_list")
+schema_table_list = cursor.fetchall()
+
+# Initialize dictionaries to store row counts
+db1_row_counts = {}
+db2_row_counts = {}
+difference_counts = {}
+
+# Iterate through schema and table names
+for schema, table in schema_table_list:
+    # Get row count for db1
+    cursor.execute(f"SELECT COUNT(*) FROM {schema}.{table}")
+    db1_count = cursor.fetchone()[0]
+
+    # Get row count for db2
+    cursor2 = conn2.cursor()
+    cursor2.execute(f"SELECT COUNT(*) FROM {schema}.{table}")
+    db2_count = cursor2.fetchone()[0]
+    cursor2.close()
+
+    db1_row_counts[f"{schema}.{table}"] = db1_count
+    db2_row_counts[f"{schema}.{table}"] = db2_count
+    difference_counts[f"{schema}.{table}"] = db1_count - db2_count
+
+# Save the counts in Loutput1, Routput2, and doutput3
+with open('Loutput1.txt', 'w') as loutput_file:
+    loutput_file.write(str(db1_row_counts))
+
+with open('Routput2.txt', 'w') as routput_file:
+    routput_file.write(str(db2_row_counts))
+
+with open('doutput3.txt', 'w') as doutput_file:
+    doutput_file.write(str(difference_counts))
+
+# Close database connections
+cursor.close()
+conn1.close()
+conn2.close()
