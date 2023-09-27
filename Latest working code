@@ -1,0 +1,120 @@
+import os
+import schedule
+import time
+import datetime
+import socket
+import psycopg2
+import requests
+import csv
+import hashlib  # Import hashlib for generating a unique hash of each row
+import logging
+
+# Configure logging
+logging.basicConfig(
+    filename="postgres_data_collection.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+# Set your PostgreSQL connection parameters
+db_params = {
+    "host": "your_postgres_host",
+    "database": "your_database",
+    "user": "your_user",
+    "password": "your_password",
+}
+
+# Set the Confluence API endpoint and credentials
+confluence_api_url = "https://your-confluence-site/rest/api/content/YOUR_PAGE_ID"  # Update with your Confluence page URL
+confluence_username = "your_username"
+confluence_password = "your_password"
+
+# Directory to store data files
+data_directory = "data"
+
+# Function to fetch data from PostgreSQL and write it to a CSV file
+def fetch_and_write_to_csv(query, filename):
+    try:
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+
+        # Execute the query
+        cursor.execute(query)
+        result = cursor.fetchall()
+
+        # Get a list of existing hashes in the CSV file
+        existing_hashes = set()
+        if os.path.exists(filename):
+            with open(filename, mode='r') as file:
+                reader = csv.reader(file)
+                next(reader)  # Skip the header row
+                for row in reader:
+                    # Calculate the hash of the row (excluding the timestamp and hostname)
+                    row_data = ",".join(row[2:])  # Skip timestamp and hostname columns
+                    row_hash = hashlib.md5(row_data.encode()).hexdigest()
+                    existing_hashes.add(row_hash)
+
+        # Write data to the CSV file
+        with open(filename, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            if os.path.getsize(filename) == 0:
+                # Write headers only if the file is empty
+                writer.writerow(["Timestamp", "Hostname"] + [desc[0] for desc in cursor.description])
+            timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            hostname = socket.gethostname()
+            for row in result:
+                # Convert the row data (tuple) to a list and concatenate
+                data = [timestamp, hostname] + list(map(str, row))  # Convert all elements to strings
+                # Calculate a unique hash of the row (excluding the timestamp and hostname)
+                row_data = ",".join(data[2:])  # Skip timestamp and hostname columns
+                row_hash = hashlib.md5(row_data.encode()).hexdigest()
+                if row_hash not in existing_hashes:
+                    # Write the row only if the hash is not in the existing_hashes set
+                    writer.writerow(data)
+                    existing_hashes.add(row_hash)
+    except Exception as e:
+        logging.error(f"Error fetching data and writing to CSV: {str(e)}")
+    finally:
+        if connection:
+            connection.close()
+
+# Function to post a file as an attachment to Confluence
+def post_to_confluence(filename):
+    auth = (confluence_username, confluence_password)
+
+    # Get the current Confluence page ID from the URL
+    confluence_page_id = confluence_api_url.split("/")[-1]
+
+    # Define the URL for uploading an attachment to the Confluence page
+    upload_url = f"https://your-confluence-site/rest/api/content/{confluence_page_id}/child/attachment"
+
+    # Set the headers for the attachment
+    headers = {
+        "X-Atlassian-Token": "nocheck",  # Disable CSRF token
+    }
+
+    with open(filename, "rb") as file:
+        # Create a new attachment on the Confluence page
+        response = requests.post(upload_url, auth=auth, headers=headers, files={"file": file})
+        if response.status_code == 200:
+            logging.info(f"Uploaded attachment to Confluence successfully.")
+            os.remove(filename)  # Remove the file after uploading
+        else:
+            logging.error(f"Error uploading attachment to Confluence: {response.text}")
+
+# Schedule the task to run every 2 minutes
+schedule.every(2).minutes.do(lambda: fetch_and_write_to_csv("SELECT NOW() AS timestamp, * FROM pg_replication_slots", os.path.join(data_directory, "pg_replication_slots.csv")))
+schedule.every(2).minutes.do(lambda: fetch_and_write_to_csv("SELECT NOW() AS timestamp, * FROM pg_stat_replication", os.path.join(data_directory, "pg_stat_replication.csv")))
+
+# Schedule the publishing task to run every 24 hours
+schedule.every(24).hours.do(lambda: post_to_confluence(os.path.join(data_directory, "pg_replication_slots.csv")))
+schedule.every(24).hours.do(lambda: post_to_confluence(os.path.join(data_directory, "pg_stat_replication.csv")))
+
+# Create the data directory if it doesn't exist
+os.makedirs(data_directory, exist_ok=True)
+
+# Run the scheduled tasks
+while True:
+    schedule.run_pending()
+    time.sleep(1)
