@@ -1,0 +1,67 @@
+import os
+import schedule
+import time
+import datetime
+import socket
+import psycopg2
+import requests
+import csv
+import logging
+from collections import defaultdict
+
+# ... (previous code)
+
+# Initialize data dictionaries
+all_slot_data = []
+all_stat_data = defaultdict(list)  # Use defaultdict to group data by timestamp
+
+# Function to fetch data from PostgreSQL and write it to CSV files
+def fetch_and_write_to_csv(query, filename, data_dict):
+    try:
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+
+        # Execute the query
+        cursor.execute(query)
+        result = cursor.fetchall()
+
+        # Append data to the data dictionary, grouped by timestamp
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        data_dict[timestamp].extend(result)
+
+        # Write data to the CSV file
+        with open(filename, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            header_written = False  # Track if header has been written
+            for ts, rows in data_dict.items():
+                if not header_written:
+                    # Write headers only if the file is empty
+                    header = ["Timestamp", "Hostname"] + [desc[0] for desc in cursor.description]
+                    writer.writerow(header)
+                    header_written = True
+
+                hostname = socket.gethostname()
+                for row in rows:
+                    # Convert the row data (tuple) to a list and concatenate
+                    data = [ts, hostname] + list(map(str, row))  # Convert all elements to strings
+                    writer.writerow(data)
+    except Exception as e:
+        logging.error(f"Error fetching data and writing to CSV: {str(e)}")
+    finally:
+        if connection:
+            connection.close()
+
+# Function to collect and write data for all replication slots
+def collect_replication_slot_data():
+    query = "SELECT NOW() AS timestamp, * FROM pg_replication_slots"
+    filename = os.path.join(data_directory, "all_replication_slots.csv")
+    fetch_and_write_to_csv(query, filename, all_slot_data)
+
+# Function to collect and write data for all pg_stat_replication
+def collect_pg_stat_replication_data():
+    query = "SELECT NOW() AS timestamp, * FROM pg_stat_replication"
+    filename = os.path.join(data_directory, "all_pg_stat_replication.csv")
+    fetch_and_write_to_csv(query, filename, all_stat_data)
+
+# ... (scheduling and main loop)
+
