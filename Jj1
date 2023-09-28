@@ -1,0 +1,98 @@
+import psycopg2
+import concurrent.futures
+import logging
+import csv
+import requests
+import datetime
+import socket
+import os  # Import the os module for file removal
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
+
+# Get current date and time
+current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+# Get hostname
+hostname = socket.gethostname()
+
+# Filenames with date, time, and hostname
+combined_output_filename = f'combined_output_{current_datetime}_{hostname}.xlsx'
+db1_report_filename = f'db1_report_{current_datetime}_{hostname}.txt'
+db2_report_filename = f'db2_report_{current_datetime}_{hostname}.txt'
+
+# Configure logging
+log_filename = f'script_{current_datetime}_{hostname}.log'
+logging.basicConfig(filename=log_filename, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Database connection details
+db1_params = {
+    'dbname': 'db1',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'db1_host'
+}
+
+db2_params = {
+    'dbname': 'db2',
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'db2_host'
+}
+
+# Function to remove files
+def remove_files(*files):
+    for file in files:
+        try:
+            os.remove(file)
+            logging.info(f"Removed {file} from the server")
+        except Exception as e:
+            logging.error(f"Error removing {file} from the server: {str(e)}")
+
+# Rest of your code (unchanged)
+
+# Upload combined_output.xlsx to Confluence
+try:
+    upload_endpoint = f"{confluence_url}/rest/api/content/{page_id}/child/attachment"
+    files = {'file': (combined_output_filename, open(combined_output_filename, 'rb'))}
+    response = requests.post(upload_endpoint, headers=headers, files=files)
+
+    if response.status_code == 200:
+        logging.info(f"{combined_output_filename} uploaded to Confluence successfully")
+        # Remove the file from the server after successful upload
+        remove_files(combined_output_filename)
+    else:
+        logging.error(f"Error uploading {combined_output_filename} to Confluence. Status code: {response.status_code}")
+except Exception as e:
+    logging.error(f"Error uploading {combined_output_filename} to Confluence: {str(e)}")
+
+# Upload db1_report.txt to Confluence
+try:
+    upload_endpoint = f"{confluence_url}/rest/api/content/{page_id}/child/attachment"
+    files = {'file': (db1_report_filename, open(db1_report_filename, 'rb'))}
+    response = requests.post(upload_endpoint, headers=headers, files=files)
+
+    if response.status_code == 200:
+        logging.info(f"{db1_report_filename} uploaded to Confluence successfully")
+        # Remove the file from the server after successful upload
+        remove_files(db1_report_filename)
+    else:
+        logging.error(f"Error uploading {db1_report_filename} to Confluence. Status code: {response.status_code}")
+except Exception as e:
+    logging.error(f"Error uploading {db1_report_filename} to Confluence: {str(e)}")
+
+# Upload db2_report.txt to Confluence
+try:
+    upload_endpoint = f"{confluence_url}/rest/api/content/{page_id}/child/attachment"
+    files = {'file': (db2_report_filename, open(db2_report_filename, 'rb'))}
+    response = requests.post(upload_endpoint, headers=headers, files=files)
+
+    if response.status_code == 200:
+        logging.info(f"{db2_report_filename} uploaded to Confluence successfully")
+        # Remove the file from the server after successful upload
+        remove_files(db2_report_filename)
+    else:
+        logging.error(f"Error uploading {db2_report_filename} to Confluence. Status code: {response.status_code}")
+except Exception as e:
+    logging.error(f"Error uploading {db2_report_filename} to Confluence: {str(e)}")
+
+# Rest of your code (unchanged)
