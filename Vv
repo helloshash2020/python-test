@@ -1,0 +1,14 @@
+# Upload combined_output.xlsx to Confluence
+try:
+    upload_endpoint = f"{confluence_url}/rest/api/content/{page_id}/child/attachment"
+    files = {'file': (combined_output_filename, open(combined_output_filename, 'rb'))}
+    response = requests.post(upload_endpoint, headers=headers, files=files)
+
+    if response.status_code == 200:
+        logging.info(f"{combined_output_filename} uploaded to Confluence successfully")
+        # Remove the file from the server after successful upload
+        remove_files(combined_output_filename)
+    else:
+        logging.error(f"Error uploading {combined_output_filename} to Confluence. Status code: {response.status_code}")
+except Exception as e:
+    logging.error(f"Error uploading {combined_output_filename} to Confluence: {str(e)}")
