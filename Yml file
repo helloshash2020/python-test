@@ -1,0 +1,36 @@
+---
+- name: Download and Run Python Script from Nexus
+  hosts: your_unix_server
+  become: yes  # Optionally, if you need sudo permissions
+
+  tasks:
+    - name: Download Python script from Nexus
+      get_url:
+        url: "<NEXUS_URL>/<FILENAME>"
+        dest: "/path/to/destination/directory/{{ FILENAME }}"
+      register: download_result
+
+    - name: Check if download was successful
+      fail:
+        msg: "Failed to download Python script from Nexus"
+      when: download_result.status != 200
+
+    - name: Run Python script
+      command: "python /path/to/destination/directory/{{ SCRIPT_NAME }}"
+      register: script_result
+      ignore_errors: yes
+
+    - name: Check if Python script executed successfully
+      fail:
+        msg: "Failed to execute Python script"
+      when: script_result.rc != 0
+
+    - name: Remove Python script
+      file:
+        path: "/path/to/destination/directory/{{ SCRIPT_NAME }}"
+        state: absent
+      when: script_result.rc == 0
+
+    - name: Cat the log file
+      command: "cat /path/to/log/file.log"
+      when: script_result.rc == 0
