@@ -1,0 +1,9 @@
+# Enable deadlock logging
+log_lock_waits = on
+
+# Deadlock detector timeout (default is fine)
+deadlock_timeout = 1s
+
+# Keep other logs minimal (optional but recommended)
+log_min_error_statement = error
+log_min_messages = error
